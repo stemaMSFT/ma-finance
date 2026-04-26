@@ -187,6 +187,57 @@
 - Tech job growth + limited housing = long-term support
 - Uncertainty about Fed/recession/rates argues for middle ground
 
+## Audit Findings
+
+### Math Audit (2026-04-26T05:04:06Z)
+**By:** Saul (Finance Analyst)
+
+**Critical Issues Found:** 2
+- **C1: mockEngine.ts — 401k Match Computed on Salary, Not Contributions** (lines 41–42, 89–90)
+  - Currently: `matchableBase = salary × 1.0 = $158,412 → match = $79,206` (WRONG)
+  - Correct: Match should be 50% of employee contributions, max $12,250/year
+  - Impact: Overstates 401k match by $66,956/year (6.5× error)
+  - Fix: Replace salary-based formula with contribution-based calculation
+  
+- **C2: mockEngine.ts — Retirement Projection Uses Same Salary-Based Match** (lines 89–90)
+  - Same bug as C1, compounds over 30-year retirement projection
+  - Impact: Overstates retirement balance by hundreds of thousands of dollars
+
+**Warnings Found:** 7
+- **W1:** compensation.ts uses 2025 IRS limit ($23,500), not 2026 ($24,500) — import from constants.ts
+- **W2:** mockEngine.ts ESPP formula incorrect — should be `contribution × 0.15 / 0.85`, not `contribution × 0.15`
+- **W3:** housing.ts back-end DTI missing monthlyDebts parameter
+- **W4:** Tax savings hardcoded at 22% — should use retirement.ts bracket calculation
+- **W5:** Promotion frequency may overstate L63+ growth — assume 2y→L63, 3y→L64, 4+y→L64+
+- **W6:** DEFAULT_MARKET_RETURN (7%) ambiguity — verify inflation adjustment downstream
+- **W7:** Break-even years formula is heuristic, not real break-even calculation
+
+**Verified Correct:** 17 items (tax brackets, SS base, ESPP formula in compensation.ts, DTI limits, RMD age, etc.)
+
+**Priority Fix Order:**
+1. C1 + C2 — Fix mockEngine.ts 401k match (currently giving wrong UI numbers)
+2. W1 — Update compensation.ts to 2026 IRS limit
+3. W2 — Fix ESPP formula in mockEngine.ts
+4. W3–W7 — Lower priority cleanups
+
+**Dual Engine Note:** Codebase has two parallel engines: `mockEngine.ts` (legacy, currently used by UI, has bugs) and new `compensation.ts`/`retirement.ts`/`housing.ts` (Linus's engine, largely correct). Best long-term: wire UI to Linus's engine.
+
+### Test Findings (2026-04-26T05:04:06Z)
+**By:** Basher (Tester)
+
+**Tests:** 254 passing total (91 new added)
+
+**Bugs Found:** 4
+- **BUG 1 — CRITICAL:** Stale 401k limit in compensation.ts (line 20) — use 2026 limit $24,500, not $23,500
+- **BUG 2 — MEDIUM:** mockEngine 401k match formula structurally wrong (lines 41–42) — matches Saul's C1 finding
+- **BUG 3 — LOW:** analyzeCompHistory crashes on empty input — needs guard clause
+- **BUG 4 — LOW:** Zero salary still gets 401k match — edge case
+
+**Test Coverage Added:**
+- compensation.test.ts: 32 tests
+- mockEngine.test.ts: 22 tests
+- financial-validation.test.ts: 37 tests (tax accuracy, FICA, 401k, ESPP, housing, paystub cross-check)
+
 ## Governance
 
 - All meaningful changes require team consensus
