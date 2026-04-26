@@ -1,0 +1,52 @@
+{
+  "agents": [
+    {
+      "persistent_name": "Danny",
+      "role": "Lead",
+      "universe": "oceans-eleven",
+      "created_at": "2026-04-26T03:58:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Rusty",
+      "role": "UI Dev",
+      "universe": "oceans-eleven",
+      "created_at": "2026-04-26T03:58:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Linus",
+      "role": "Engine Dev",
+      "universe": "oceans-eleven",
+      "created_at": "2026-04-26T03:58:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Basher",
+      "role": "Tester",
+      "universe": "oceans-eleven",
+      "created_at": "2026-04-26T03:58:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Saul",
+      "role": "Finance Analyst",
+      "universe": "oceans-eleven",
+      "created_at": "2026-04-26T03:58:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Reuben",
+      "role": "Real Estate Advisor",
+      "universe": "oceans-eleven",
+      "created_at": "2026-04-26T04:03:00Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}
