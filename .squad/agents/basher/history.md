@@ -47,3 +47,12 @@
 - All tax calculations, SS base, RMD age
 
 ---
+
+## 2026-04-26: Math Fixes Complete
+
+Fixed all 6 compensation engine bugs:
+- 401k match now computed on employee contributions (not salary)
+- ESPP formula corrected to discount / (1 - discount)
+- All IRS limits sourced from constants.ts
+- 254/254 tests passing
+- Decision document: docs/decisions.md

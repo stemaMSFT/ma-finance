@@ -70,6 +70,21 @@ Created `.squad/decisions/inbox/saul-financial-data.md` with 12 decision documen
 - **Seattle market specific:** Property taxes, insurance, home appreciation, and renovation ROI differ from national averages. Document local data, not just national.
 - **Annual review required:** Tax limits, rates, and depreciation data change yearly. January IRS announcement is key refresh date.
 
+### Full Financial Math Audit (April 26, 2026)
+
+**Trigger:** Steven reported 401k employer match calculated against salary instead of contributions.
+
+**Audit Scope:** All 6 engine files + CompensationPanel.tsx. Checked 401k match, tax brackets, ESPP, SS/Medicare, housing formulas, and hardcoded values.
+
+**Key Findings:**
+- **2 CRITICAL bugs** in `mockEngine.ts`: 401k match computed as 50% of salary ($79,206) instead of 50% of contributions ($12,250). Overstates match by 6.5×. Both `calcCompensation()` and `calcRetirement()` affected. The CompensationPanel.tsx uses mockEngine, so the UI is actively showing wrong numbers.
+- **7 WARNINGS:** compensation.ts uses 2025 IRS limit ($23,500 not $24,500), ESPP formula in mockEngine understates benefit by 15%, housing.ts back-end DTI ignores other debts, hardcoded 22% tax rate, overly aggressive promotion assumptions for L63+, market return nominal/real ambiguity, rough break-even heuristic.
+- **17 items verified correct:** Tax brackets, SS wage base, Medicare rates, mortgage amortization, DTI limits, SS claiming adjustments, SWR, home appreciation, RMD age, Linus's new engine formulas.
+
+**Critical Insight:** Linus's new engine (`compensation.ts`, `retirement.ts`, `housing.ts`) is largely correct. The bugs are concentrated in the legacy `mockEngine.ts` which the UI currently uses. Best path forward is wiring UI to the new engine.
+
+**Report written to:** `.squad/decisions/inbox/saul-math-audit.md`
+
 **Sources Used:**
 - IRS.gov (limits, brackets, RMD rules, tax rates).
 - SSA.gov (Social Security wage base, benefit estimation).
@@ -79,3 +94,82 @@ Created `.squad/decisions/inbox/saul-financial-data.md` with 12 decision documen
 - U.S. Bureau of Labor Statistics (CPI/inflation).
 - SHRM, Financial industry reports (employer match practices, safe withdrawal rates).
 - Morningstar, Vanguard (retirement withdrawal strategy research).
+
+### Retirement Projection Assumptions (April 26, 2026)
+
+**Trigger:** Steven requested complete retirement projection assumptions (age 30 to 65) grounded in research, with Optimistic/Base/Conservative scenarios.
+
+**Research Completed:**
+
+1. **Microsoft Compensation Model (L59–L65+):**
+   - Merit increases: 3.5% L59–L62, declining to 2.5% at L65+.
+   - Promotion frequency: 1.0–1.5yr early career (L59–L62), slowing to 2–3yr at L63+.
+   - Promotion salary bumps: 8–12% per level; stock bumps 25–50%.
+   - Terminal assumption: L63 by age 37, plateau through retirement (most likely scenario).
+   - Terminal comp (base): $195k L63 with merit growth to $617k by age 65 (all nominal).
+   - Sources: Levels.fyi, Blind, Steven's actual L59–L62 data (verified).
+
+2. **Market & Investment Returns:**
+   - Lifecycle glide path: 90/10 equities (age 30) → 30/70 (age 60+).
+   - Nominal returns: 8.0% (aggressive 30–40) → 4.0% (conservative 60–65).
+   - Base case: 6.5% for 70/30 portfolio (age 40–55).
+   - Inflation: 2.5%/yr (Fed target 2%, post-WWII avg 2.4%; use 2.5% as defensible midpoint).
+   - Real returns: 5.5% (aggressive), 4.0% (moderate), 2.5% (conservative) after inflation.
+   - Sources: Vanguard, Morningstar, academic (Damodaran, Shiller CAPE), historical 1926–2024 data.
+
+3. **401k & Retirement Accounts:**
+   - 2026 limits: $24,500 (employee), $72,000 (aggregate). SECURE 2.0 super catch-up ages 60–63: +$5,000 additional.
+   - Employer match: 50% of deferrals up to $12,250/yr (Microsoft policy, verified).
+   - IRS limit growth: ~2%/yr historical trend; model as indexed.
+   - Contribution strategy: 85% Traditional / 15% Roth (base case; user toggle to 100% Roth or 50/50).
+   - Tax benefit: 39.65% marginal today (32% federal + 7.65% FICA); 24% marginal in retirement → Roth arbitrage ~15% savings.
+   - Projected age-65 balance: $3.6M (base case, 2026 dollars) from $36.75k annual contributions over 35 years.
+   - Sources: IRS.gov, SSA.gov, Microsoft HR, Levels.fyi.
+
+4. **Social Security:**
+   - Estimated PIA (high earner): $3,800/month at FRA 67 = $45,600/yr.
+   - Claiming age scenarios: 62 ($31,920/yr), 67 ($45,600/yr), 70 ($57,024/yr).
+   - Taxation: 85% of SS included in taxable income for high-earner scenario (Provisional Income >$44k).
+   - Break-even: Claim 62 vs. 67 at age 80; claim 67 vs. 70 at age 82.
+   - Assumption: Base case delay to 70 if portfolio >$3M at 65 (optimal for longevity).
+   - Sources: SSA.gov, IRS Pub 915, AIME formula.
+
+5. **Retirement Spending & Safe Withdrawal Rate:**
+   - SWR: 3.5% (conservative mid-point) vs. traditional 4% rule.
+   - Rationale: Modern success rate 95–96% (30-yr horizon) for 3.5%; 4% rule now 85–90% due to valuation headwinds.
+   - Replacement ratio: 75% of pre-retirement income (target); SWR covers 50–60%, SS covers ~25–30%.
+   - Healthcare inflation: 3.5%/yr (vs. general 2.5%); healthcare = 5% of spending age 65–74, 8% at 75+.
+   - Terminal spending: $183k/yr (year 1 of retirement, base case) = $126k portfolio withdrawal + $57k SS.
+   - Sources: Bengen (4% rule), Kitces (updated SWR), Morningstar, FIRE community research.
+
+6. **Scenario Modeling (Optimistic / Base / Conservative):**
+   - Conservative: L62 terminal, 5.5% return, 3.0% SWR → $2.5M age 65, $75k annual retirement income.
+   - Base: L63 by age 37, 6.5% return, 3.5% SWR → $3.6M age 65, $183k annual retirement income.
+   - Optimistic: L64 by age 42, 7.5% return, 4.0% SWR → $4.8M age 65, $249k annual retirement income.
+   - Key levers (ranked by impact): Market return (±35%), contribution rate (±25%), promotion (±20%), retirement age (±$300k–500k/yr).
+   - Success probability: 92% (conservative) to 98% (optimistic) for 30-year horizon.
+   - Sources: Monte Carlo research, SWR analysis, promotion trajectory data.
+
+**Key Insights:**
+- **Promotion is critical:** L62→L63 jump adds $40k+ annual comp ($195k base vs. $175k if no promo), compounding to ~$500k+ extra lifetime earnings.
+- **Market return dominates:** 1% return variance = ±$600k at age 65. Most important assumption to expose to user sensitivity.
+- **Roth arbitrage works:** At 39.65% marginal (current) vs. 24% retirement, Roth provides real 15% tax savings if income stays high or tax rates rise.
+- **3.5% SWR is sweet spot:** Conservative enough for 30-year horizon, allows modest inflation growth, avoids hard 4% rule risk.
+- **Social Security delay to 70 optimal:** If portfolio sufficient, delay maximizes longevity insurance (pension-like income). Break-even age 82 is reasonable health assumption for high-earner.
+
+**Output:** `.squad/decisions/inbox/saul-retirement-assumptions.md` — 10-section structured reference for Linus to build projection engine. All assumptions have numeric values + rationale + sources. Ready for UI implementation.
+
+**What Became Clear:**
+- **Microsoft compensation data essential:** Generic SWR/return models miss L-level-specific salary progression (promo bumps, stock vesting, match details).
+- **Annual recalibration required:** IRS limits, tax brackets, SS rules change yearly. January refresh recommended.
+- **User scenarios build confidence:** Showing Optimistic/Base/Conservative with clear levers (retirement age, market return, promo) gives Steven agency vs. single-point forecast.
+- **Tax modeling complex but critical:** Roth vs. Traditional, SS taxation, WA capital gains (7% if >$250k gains/yr) — all matter for net retirement income.
+
+## 2026-04-26: Math Fixes Complete
+
+Fixed all 6 compensation engine bugs:
+- 401k match now computed on employee contributions (not salary)
+- ESPP formula corrected to discount / (1 - discount)
+- All IRS limits sourced from constants.ts
+- 254/254 tests passing
+- Decision document: docs/decisions.md
