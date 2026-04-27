@@ -122,3 +122,15 @@ Wrote 91 new tests (254 total passing):
 - The glide path minAge needed to extend down to 27 (was 30) to cover the new starting age.
 - `buildTrackConfig()` helper makes it clean to construct per-track ProjectionConfigs from a base config.
 - Blending timelines (weighted average of numeric fields) works well for the most likely line but loses the portfolio path-dependency. Acceptable because the portfolio inputs are capped anyway.
+
+---
+
+### Authentication System Implementation (2026-04-27)
+
+**Status:** Completed. All 313 tests pass.
+
+**Note for Engine Dev:**
+- Auth system live but doesn't affect engine logic or types
+- Protected routes ensure authenticated access to all scenario panels
+- Engine functions remain pure, unaffected by auth layer
+- Backend ready for Render deployment with secured endpoints
