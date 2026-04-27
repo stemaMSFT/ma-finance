@@ -121,3 +121,8 @@
   color: #888;
   line-height: 1.8;
 }
+
+/* == Loading spinner animation (used by panel overlays) == */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
