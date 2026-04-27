@@ -2,7 +2,7 @@
   "name": "ma-finance",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://stema.github.io/ma-finance/",
+  "homepage": "https://stemaMSFT.github.io/ma-finance/",
   "type": "module",
   "scripts": {
     "dev": "vite",
