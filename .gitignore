@@ -18,6 +18,9 @@ server/db/data/
 # Personal financial data (never commit)
 src/data/
 
+# Environment variables (credentials)
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

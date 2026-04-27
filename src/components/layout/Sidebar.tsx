@@ -1,4 +1,5 @@
 import type { ScenarioTab } from '../../engine/types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   activeTab: ScenarioTab;
@@ -15,6 +16,8 @@ const tabs: { id: ScenarioTab; label: string; icon: string }[] = [
 ];
 
 export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+  const { logout, email } = useAuth();
+
   return (
     <nav className="sidebar">
       <div className="sidebar-header">
@@ -35,7 +38,22 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         ))}
       </ul>
       <div className="sidebar-footer">
-        <p>Built for Steven & family</p>
+        {email && <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 8px' }}>{email}</p>}
+        <button
+          onClick={logout}
+          style={{
+            background: 'none',
+            border: '1px solid #334155',
+            color: '#94a3b8',
+            padding: '6px 16px',
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 13,
+            width: '100%',
+          }}
+        >
+          Sign Out
+        </button>
       </div>
     </nav>
   );

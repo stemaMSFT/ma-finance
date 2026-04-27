@@ -1,1 +1,1 @@
-{"root":["./index.ts","./db/store.ts","./middleware/errorhandler.ts","./routes/calculations.ts","./routes/scenarios.ts"],"errors":true,"version":"6.0.3"}
+{"root":["./index.ts","./db/store.ts","./middleware/auth.ts","./middleware/errorhandler.ts","./routes/auth.ts","./routes/calculations.ts","./routes/scenarios.ts"],"errors":true,"version":"6.0.3"}

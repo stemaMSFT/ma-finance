@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { ScenarioTab } from './engine/types';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 import Sidebar from './components/layout/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
 import CompensationPanel from './components/scenarios/CompensationPanel';
@@ -19,7 +21,7 @@ const panels: Record<ScenarioTab, React.FC> = {
   renovation: RenovationPanel,
 };
 
-function App() {
+function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<ScenarioTab>('compensation');
   const ActivePanel = panels[activeTab];
 
@@ -32,6 +34,22 @@ function App() {
         </ErrorBoundary>
       </main>
     </div>
+  );
+}
+
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (!isAuthenticated) return <LoginPage />;
+  return <AuthenticatedApp />;
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
