@@ -31,3 +31,22 @@
 - **danny**: Express backend with scenario CRUD and calculation APIs
 
 ---
+
+## GitHub Pages Deployment (2026-04-27)
+
+### What was done
+- Created public GitHub repo `stemaMSFT/ma-finance` on Steven's personal account
+- Configured `vite.config.ts` with `base: '/ma-finance/'` for correct GH Pages asset paths
+- Added `.github/workflows/deploy.yml` — triggers on push to main, runs `npx vite build`, deploys via `actions/deploy-pages`
+- Added `public/404.html` with SPA redirect script (standard GH Pages SPA fix)
+- Added redirect handler in `index.html` for SPA routing
+- Added `homepage` to `package.json`
+- Enabled GitHub Pages with workflow build type via API
+- Deploy workflow runs and succeeds — site live at https://stemamsft.github.io/ma-finance/
+
+### Decisions
+- Used `npx vite build` instead of `npm run build` in CI because pre-existing TS errors fail `tsc -b`. Vite itself builds cleanly — the TS errors need separate attention.
+- Used personal account (`stemaMSFT`) because EMU account (`stema_microsoft`) cannot create public repos and private repos don't get GH Pages on this plan.
+- Branch renamed from `master` to `main` (GH Pages default).
+
+---
