@@ -3,6 +3,7 @@ import type { ScenarioTab } from './engine/types';
 import Sidebar from './components/layout/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
 import CompensationPanel from './components/scenarios/CompensationPanel';
+import ExpensesPanel from './components/scenarios/ExpensesPanel';
 import RetirementPanel from './components/scenarios/RetirementPanel';
 import RetirementProjectionPanel from './components/scenarios/RetirementProjectionPanel';
 import HousingPanel from './components/scenarios/HousingPanel';
@@ -11,6 +12,7 @@ import './App.css';
 
 const panels: Record<ScenarioTab, React.FC> = {
   compensation: CompensationPanel,
+  expenses: ExpensesPanel,
   retirement: RetirementPanel,
   projection: RetirementProjectionPanel,
   housing: HousingPanel,

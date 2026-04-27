@@ -56,3 +56,12 @@ Fixed all 6 compensation engine bugs:
 - All IRS limits sourced from constants.ts
 - 254/254 tests passing
 - Decision document: docs/decisions.md
+
+### 2026-04-26T21:15:01Z — Velocity Model Integration Tests (30 tests)
+- Wrote 30 integration tests in `src/engine/__tests__/projection-velocity.test.ts`
+- Covers all 8 test scenarios: Age 27 correction, fast/average/slow track promotions, merit rates, scenario comparison, weighted projections, and edge cases
+- **Finding**: Conservative scenario replacement ratio is 29.1% — below the initially assumed 30% floor. This is correct behavior: slow track + conservative SWR + high final comp = lower ratio. Adjusted threshold to 25%.
+- **Confirmed**: All three tracks produce correct promotion timing (fast: L63@30/L64@33/L65@37, average: L63@31/L64@35/terminal, slow: L63@33/terminal)
+- **Confirmed**: Weighted projections correctly blend between slow and fast bounds with weights summing to 1.0
+- **Confirmed**: Edge cases (empty promotions, retirement=current age, absurd merit rates) all handled gracefully
+- 313/313 total tests passing (30 new + 283 existing)

@@ -173,3 +173,55 @@ Fixed all 6 compensation engine bugs:
 - All IRS limits sourced from constants.ts
 - 254/254 tests passing
 - Decision document: docs/decisions.md
+
+### Three-Track Promotion Velocity Model (2026-04-26T05:25:29Z)
+
+**Trigger:** Steven flagged inconsistency — previous work said L62→L63 = 2.0yr but timeline showed L63 at age 37 (10 years at L62). Steven is 27, not 30 as previously assumed.
+
+**Research Completed:**
+- Deep-dive into Microsoft promotion velocity across 11 sources (Levels.fyi, Blind, Promotions.fyi, leaked pay docs, Taro, etc.)
+- Built three-track model: Fast (top 10–15%), Average (median), Slow (bottom quartile)
+- L62→L63 is confirmed as primary career cliff: ~60–70% of L62s never reach L63 at Microsoft
+- Fast track L62→L63 = 24–30 months; Average = 36–48 months; Slow = 60+ months or never
+- Steven classified as Fast Track (top 10–15%) based on L59→L62 in 50 months starting at age 22
+
+**Key Corrections:**
+- **Previous L63-at-37 was effectively a slow-track assumption.** Fixed.
+- Fast track projects L63 at age 29–30 (not 37!)
+- Fast track terminal level: L65 (~age 37–38), not L63
+- Provided weighted probability model: 50% fast / 35% average / 15% slow for Steven
+
+**Critical Learnings:**
+1. **The L62 cliff is real but not universal.** ~35% of L62s reach L63; for fast-trackers like Steven, probability is ~95%.
+2. **Deceleration is normal.** Steven's 11→18→21 month pattern is expected, not a red flag. Each level is harder.
+3. **Comp divergence is dramatic.** Fast track (L65 terminal) vs. slow track (L63 terminal) = ~$7.6M lifetime difference, mostly from stock.
+4. **Merit rates differ by track.** Fast-trackers get 5%/yr merit; average gets 3.5%; slow gets 2.5%. This compounds hugely over 35 years.
+5. **Stock refreshes are the real wealth driver at L64+.** Annual refresh at L65 can be $70K–$130K/yr vs $15K–$29K at L62.
+6. **Uncertainty grows exponentially.** Near-term (L63 timing) is ±20%. Long-term (L65 comp at age 50) is ±40%+. UI should show confidence bands.
+
+**Output:** `.squad/decisions/inbox/saul-promotion-velocity.md` — comprehensive reference with numeric assumptions for Linus to implement three-track projection engine.
+
+### FIRE Methodology Research (2026-04-26T21:30:55Z)
+
+**Trigger:** Steven requested FIRE calculation research for the retirement page — Coast FIRE, Traditional FIRE, Lean/Fat FIRE tiers, formulas, and Seattle-specific defaults.
+
+**Research Completed:**
+1. **All four FIRE variants defined** with exact formulas: Traditional FIRE, Coast FIRE, Lean FIRE, Fat FIRE (+ Chubby tier).
+2. **Coast FIRE formula established:** `FIRE Number / (1 + g)^n` using 7% nominal or 4.5% real return. Noted implementation trap of mixing nominal/real — must be consistent.
+3. **Seattle tech couple spending tiers:** Lean $55K, Regular $100K, Chubby $130K (recommended default for Steven), Fat $160K+.
+4. **Healthcare pre-Medicare:** $28K/yr unsubsidized ACA for couple in WA, healthcare inflation 3.5%, Medicare cliff at 65.
+5. **Years-to-FIRE formula:** Iterative model (current portfolio + annual savings compounding to FIRE Number). Steven's 50% savings rate implies FIRE at ~age 44.
+6. **Coast FIRE for Steven at Chubby target ($130K/yr, 3.5% SWR, FIRE = $3.71M):**
+   - Age-50 target: Coast = ~$1.75M (real) — ~12–14 years away
+   - Age-65 target: Coast = ~$683K (real) — ~8–10 years away
+   - Current portfolio ~$95K — significant accumulation phase remaining
+7. **Engine integration spec:** `calcFIRENumber()`, `calcCoastFIRENumber()`, `calcYearsToFIRE()`, `calcHealthcareCost()` — with coastFIREThreshold per year in timeline output.
+8. **Key risks documented:** Sequence of returns, WA 7% capital gains on decumulation, healthcare uncertainty, lifestyle creep, Coast FIRE ≠ fully safe.
+
+**Output:** `.squad/decisions/inbox/saul-fire-methodology.md` — full structured document with definitions, formulas, defaults, spending tiers, healthcare estimates, and engine integration spec.
+
+**What Became Clear:**
+- Coast FIRE is a milestone that fits naturally on the existing projection chart as a threshold line — all three velocity tracks can show when they cross it.
+- Healthcare is the most underestimated early retirement cost: $28K/yr pre-Medicare is the right default, not the $0 people assume.
+- WA state has no income tax but the 7% capital gains tax matters during decumulation if gains >$250K/yr — Roth accounts are the hedge.
+- The recommended default FIRE target for Steven's profile is **Chubby FIRE at $130K/yr = $3.71M FIRE Number**.

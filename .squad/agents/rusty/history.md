@@ -54,3 +54,52 @@
 - Real estate affordability engine (Reuben/Linus collab)
 
 ---
+
+## Team Update — Retirement Projection Panel (2026-04-26 05:17:51Z)
+
+### Session Focus: New RetirementProjectionPanel visualization component
+
+**Rusty Accomplishments:**
+- Built `src/components/scenarios/RetirementProjectionPanel.tsx` — full 5-tab interactive panel
+  - **Overview**: Hero portfolio metric ($3.6M), SVG readiness gauge, metric cards, promotion timeline, mini chart
+  - **Projection**: 3-scenario area chart (age 30→95) + stacked contribution breakdown bar chart
+  - **Compensation**: Comp trajectory with scenario bands + stacked base/bonus/stock bars + promotion markers
+  - **Scenarios**: 3-column comparison table, horizontal bar chart, lever differentiation grid
+  - **Settings**: Sliders, segmented controls, toggles — all update projections via useMemo
+- Mock data inline — designed for swap with Linus's projection engine
+- Color tokens: conservative=blue, base=green, optimistic=purple
+- Wired into app: ScenarioTab union, Sidebar, App.tsx panel registry
+- TypeScript clean, all 254 tests pass
+
+### 2026-04-26 — Engine wiring + UI polish pass
+- **Replaced ALL mock generators** (generatePortfolioProjection, generateCompTrajectory, generateContributionBreakdown, computeReadiness) with real imports from Linus's `projection.ts` engine
+- Engine functions used: `createDefaultConfig`, `projectRetirementTimeline`, `projectCompensationGrowth`, `calculateRetirementReadiness`, `runScenarioComparison`
+- Engine constants exported: `TRACK_PROMOTIONS`, `TRACK_MERIT_RATES`, `DEFAULT_TRACK_WEIGHTS` (had to add `export` keyword — were module-private)
+- **New setting: Velocity Track selector** (fast/average/slow) drives promotions, merit rates, and level params
+- `buildConfig()` maps UI settings → `ProjectionConfig` overrides cleanly
+- Scenario comparison table now uses real engine `ScenarioComparison` readiness data (7 metrics × 3 scenarios)
+- Milestones on projection chart come from engine `YearlyProjection.milestones[]` — promotions, $1M/$2M/$3M crossings, catch-up eligibility
+- **UI polish**: New tab bar (pill style), card system with subtle shadows, TrackBadge pill, LoadingOverlay spinner, responsive grid, Toggle/SegmentedGroup components, glassmorphism tooltips, consistent COLORS tokens
+- Recharts `Cell` import added for per-bar coloring in terminal portfolio chart (replaces broken `<rect>` approach)
+- `SSClaimAge` type imported from engine types instead of inline `62 | 67 | 70`
+- All 313 tests pass, TypeScript clean
+
+---
+
+## Team Update — CompensationPanel Modernization (2026-04-26 21:30:55Z)
+
+### Session Focus: Overhaul CompensationPanel UI to match RetirementProjectionPanel quality
+
+**Rusty Accomplishments:**
+- Full rewrite of `src/components/scenarios/CompensationPanel.tsx`
+- Replaced flat 4-tab layout (steven/partner/combined/history) with polished 4-tab pill bar (Overview/Breakdown/History/Projections)
+- **Design system**: Same COLORS tokens + S style object as RetirementProjectionPanel; glassmorphism ChartTooltip; LoadingOverlay spinner
+- **Overview tab**: Dark hero card with household total comp prominent ($307k+), 6 metric cards with accent left borders, ComparisonChart side-by-side
+- **Breakdown tab**: Per-person segmented selector (Steven/Partner); all inputs preserved; hero total comp card with gradient; BreakdownChart pie + inline styled detail table
+- **History tab**: FY milestone cards with YoY growth indicators; base salary LineChart with gradient + ReferenceLine; stacked BarChart; styled table — all matching S.card/S.cardTitle pattern
+- **Projections tab**: Wired to real engine — `createDefaultConfig()` + `projectCompensationGrowth()` (next 15 years); AreaChart with area gradient + promotion ReferenceLine markers; stacked BarChart (base/bonus/stock); info callout card
+- Removed all class-based CSS (metric-card, panel-grid, comp-table, etc.) — all inline styles matching RetirementProjectionPanel
+- Imported `formatPercent` (was missing), `useEffect`, `AreaChart`, `Area` from Recharts
+- TypeScript clean; all 313 tests pass
+
+---

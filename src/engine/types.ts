@@ -109,7 +109,69 @@ export interface ScenarioResult {
 
 // ── Scenario Tabs ─────────────────────────────────────────────────
 
-export type ScenarioTab = 'compensation' | 'retirement' | 'projection' | 'housing' | 'renovation';
+export type ScenarioTab = 'compensation' | 'expenses' | 'retirement' | 'projection' | 'housing' | 'renovation';
+
+// ── Expense Budget ────────────────────────────────────────────────
+
+export type ExpenseGroup = 'essential' | 'lifestyle' | 'obligations' | 'future';
+
+export interface ExpenseCategoryDef {
+  id: string;
+  label: string;
+  icon: string;
+  group: ExpenseGroup;
+  defaultMonthly: number;
+  description: string;
+  min: number;
+  max: number;
+  step: number;
+}
+
+export interface ExpenseBudget {
+  categories: Record<string, number>;   // category id → monthly amount
+  totalMonthly: number;
+  totalAnnual: number;
+}
+
+export interface SavingsAnalysis {
+  grossHouseholdIncome: number;
+  estimatedTaxes: number;
+  afterTaxIncome: number;
+  totalAnnualExpenses: number;
+  annualSavings: number;
+  monthlySavings: number;
+  savingsRate: number;                  // as decimal (of gross)
+  afterTaxSavingsRate: number;          // as decimal (of after-tax)
+}
+
+export interface ExpenseFIREImpact {
+  fireNumber: number;
+  coastFIRENumber: number;
+  yearsToFIRE: number;
+  fireAge: number;
+  savingsRate: number;
+}
+
+// ── Savings Allocation ────────────────────────────────────────────
+
+export type SavingsBucketGroup = 'tax_advantaged' | 'goals' | 'cash';
+
+export interface SavingsBucketDef {
+  id: string;
+  label: string;
+  icon: string;
+  group: SavingsBucketGroup;
+  annualLimit: number | null;  // null = no hard limit
+  description: string;
+  defaultAnnual: number;
+}
+
+export interface SavingsAllocation {
+  buckets: Record<string, number>;  // bucket id → annual amount
+  totalAllocated: number;
+  unallocated: number;
+  availableSavings: number;  // after-tax income minus expenses
+}
 
 // ── Compensation History & Trajectory ─────────────────────────────
 

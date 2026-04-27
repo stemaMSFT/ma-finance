@@ -15,6 +15,9 @@ dist-ssr
 # Server data files (local persistence)
 server/db/data/
 
+# Personal financial data (never commit)
+src/data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
