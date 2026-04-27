@@ -32,7 +32,29 @@
 
 ---
 
-## GitHub Pages Deployment (2026-04-27)
+### Authentication System Implementation (2026-04-27)
+
+**Status:** Completed. All 313 tests pass.
+
+**Backend:**
+- Express middleware: cookie-session with secure, httpOnly, sameSite=strict
+- bcrypt-based password hashing (10 rounds salt)
+- Routes: POST /api/auth/login, POST /api/auth/logout, GET /api/health
+- Request signing for local dev (via password-hash-helper.ts)
+- .env.example with placeholders for SESSION_SECRET, NODE_ENV
+
+**Frontend:**
+- AuthContext (React) with login/logout actions and user state
+- Protected routes via ProtectedRoute component
+- Login page (LoginPage.tsx) with email/password form and error handling
+- Session persistence: Auth state survives page refresh (via cookie)
+
+**Impact:**
+- All existing functionality protected by auth check
+- Public health check endpoint available for deployment health verification
+- Ready for Render deployment with environment-based secrets
+
+---
 
 ### What was done
 - Created public GitHub repo `stemaMSFT/ma-finance` on Steven's personal account
@@ -50,3 +72,28 @@
 - Branch renamed from `master` to `main` (GH Pages default).
 
 ---
+
+## Render Deployment Setup (2026-04-27T11:27:44.050-07:00)
+
+### What was done
+- Created `render.yaml` Blueprint spec at repo root — single free-tier web service
+- Build command: `npm ci && npx vite build` (vite directly, bypasses pre-existing TS errors — consistent with GH Pages CI approach)
+- Start command: `npm run start` (Linux-compatible, works on Render)
+- Health check: `/api/health`
+- Auth env vars (AUTH_EMAIL, AUTH_PASSWORD_HASH, SESSION_SECRET) marked `sync: false` — must be set manually in Render dashboard
+- Updated `vite.config.ts`: base path is now conditional — `/ma-finance/` when `GITHUB_PAGES=true`, else `/`
+- Updated `.github/workflows/deploy.yml`: build step sets `GITHUB_PAGES: 'true'` so GH Pages retains correct asset paths
+- Added `start:local` script using `cross-env` for Windows-compatible local production testing
+- Installed `cross-env` as devDependency
+- Updated `README.md` with "Deploy to Render" section including ephemeral data warning
+- Both builds verified: `GITHUB_PAGES=true` → `/ma-finance/` base; no flag → `/` base
+
+### Key file paths
+- `render.yaml` — Render Blueprint spec (repo root)
+- `vite.config.ts` — conditional base path via GITHUB_PAGES env var
+- `.github/workflows/deploy.yml` — GH Pages CI sets GITHUB_PAGES=true
+- `server/index.ts` — already had `trust proxy` set for Render/proxy environments
+- `scripts/hash-password.ts` — generates bcrypt hash for AUTH_PASSWORD_HASH env var
+
+---
+

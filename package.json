@@ -13,6 +13,7 @@
     "server": "tsx server/index.ts",
     "server:dev": "tsx watch server/index.ts",
     "start": "NODE_ENV=production node --import tsx server/index.ts",
+    "start:local": "npx cross-env NODE_ENV=production node --import tsx server/index.ts",
     "auth:hash": "tsx scripts/hash-password.ts"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^10.1.0",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

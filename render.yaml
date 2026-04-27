@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ma-finance
+    env: node
+    plan: free
+    buildCommand: npm ci && npx vite build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: AUTH_EMAIL
+        sync: false
+      - key: AUTH_PASSWORD_HASH
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production
