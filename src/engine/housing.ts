@@ -9,12 +9,19 @@ import type {
   ScenarioResult,
   TimelinePoint,
   UserProfile,
+  EastsideCity,
+  PropertyType,
 } from './types';
 import { monthlyPayment, futureValue } from './projections';
 import {
   PMI_RATE,
   PMI_REMOVAL_LTV,
   HOME_APPRECIATION_MODERATE,
+  EASTSIDE_MARKET_DATA,
+  MORTGAGE_RATE_CONFORMING,
+  MORTGAGE_RATE_JUMBO,
+  CONFORMING_LOAN_LIMIT_KING_COUNTY,
+  DEFAULT_CLOSING_COST_PERCENT,
 } from './constants';
 
 // ── Monthly Housing Cost Breakdown ────────────────────────────────
@@ -285,3 +292,87 @@ export function compareRenovationVsSave(
     warnings,
   };
 }
+
+// ── Eastside Seattle Market Helpers ──────────────────────────────
+
+/**
+ * Determine whether a loan amount is conforming or jumbo for King County (2026).
+ *
+ * @param loanAmount - The loan principal
+ * @returns 'conforming' if within the King County limit, 'jumbo' otherwise
+ */
+export function getLoanType(loanAmount: number): 'conforming' | 'jumbo' {
+  return loanAmount <= CONFORMING_LOAN_LIMIT_KING_COUNTY ? 'conforming' : 'jumbo';
+}
+
+/**
+ * Return the current market mortgage rate for a given loan type (April 2026).
+ *
+ * @param loanType - 'conforming' or 'jumbo'
+ * @returns Annual mortgage rate as a decimal
+ */
+export function getMortgageRate(loanType: 'conforming' | 'jumbo'): number {
+  return loanType === 'conforming' ? MORTGAGE_RATE_CONFORMING : MORTGAGE_RATE_JUMBO;
+}
+
+/**
+ * Calculate the debt-to-income ratio.
+ *
+ * @param monthlyDebtPayments - Total monthly debt obligations (PITI + other debts)
+ * @param monthlyGrossIncome - Gross monthly household income
+ * @returns DTI as a decimal (e.g. 0.35 = 35%)
+ */
+export function calculateDTI(
+  monthlyDebtPayments: number,
+  monthlyGrossIncome: number,
+): number {
+  if (monthlyGrossIncome <= 0) return Infinity;
+  return monthlyDebtPayments / monthlyGrossIncome;
+}
+
+/**
+ * Build a pre-filled HousingInput for a given Eastside city and property type,
+ * using Reuben's 2026 market data and the appropriate conforming/jumbo rate.
+ *
+ * @param city - Eastside city: 'kirkland' | 'redmond' | 'bellevue'
+ * @param propertyType - Property type: 'sfh' | 'condo' | 'townhome'
+ * @param downPaymentPercent - Down payment fraction (default 0.20)
+ * @returns Fully populated HousingInput ready for calculateMonthlyHousingCost
+ */
+export function getEastsideDefaults(
+  city: EastsideCity,
+  propertyType: PropertyType,
+  downPaymentPercent = 0.20,
+): HousingInput {
+  const market = EASTSIDE_MARKET_DATA[city];
+
+  const homePriceMap: Record<PropertyType, number> = {
+    sfh: market.medianSFH,
+    condo: market.medianCondo,
+    townhome: market.medianTownhome,
+  };
+  const hoaMonthlyMap: Record<PropertyType, number> = {
+    sfh: market.hoaSFH,
+    condo: market.hoaCondo,
+    townhome: market.hoaTownhome,
+  };
+
+  const homePrice = homePriceMap[propertyType];
+  const loanAmount = homePrice * (1 - downPaymentPercent);
+  const loanType = getLoanType(loanAmount);
+  const mortgageRate = getMortgageRate(loanType);
+  const pmiRequired = downPaymentPercent < 0.20;
+
+  return {
+    homePrice,
+    downPaymentPercent,
+    mortgageRate,
+    mortgageTermYears: 30,
+    propertyTaxRate: market.propertyTaxRate,
+    annualInsurance: market.annualInsurance,
+    monthlyHOA: hoaMonthlyMap[propertyType],
+    closingCostPercent: DEFAULT_CLOSING_COST_PERCENT,
+    pmiRequired,
+  };
+}
+
