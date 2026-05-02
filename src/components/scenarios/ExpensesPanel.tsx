@@ -152,6 +152,13 @@ export default function ExpensesPanel() {
   const [importedMeta, setImportedMeta] = useState<ImportMeta | null>(null);
   const [useActuals, setUseActuals] = useState(false);
 
+  // Filter to married life (May 2025+) — pre-marriage spending is a different financial picture
+  const ACTUALS_START = '2025-05';
+  const filteredTransactions = useMemo(
+    () => importedTransactions.filter(t => t.date >= ACTUALS_START),
+    [importedTransactions],
+  );
+
   // Income inputs
   const [stevenIncome, setStevenIncome] = useState(210_000);
   const [spouseIncome, setSpouseIncome] = useState(185_000); // MSFT L61 total comp placeholder
@@ -187,10 +194,10 @@ export default function ExpensesPanel() {
 
   // ── Compute actual monthly averages from imported data ───────────
   const actualMonthlyByCategory = useMemo(() => {
-    if (importedTransactions.length === 0) return null;
+    if (filteredTransactions.length === 0) return null;
 
-    const expenseTxns = importedTransactions.filter(t => t.transactionType === 'expense');
-    const refundTxns = importedTransactions.filter(t => t.transactionType === 'refund');
+    const expenseTxns = filteredTransactions.filter(t => t.transactionType === 'expense');
+    const refundTxns = filteredTransactions.filter(t => t.transactionType === 'refund');
 
     // Count distinct months for proper averaging
     const months = new Set<string>();
@@ -215,7 +222,7 @@ export default function ExpensesPanel() {
       result[cat.id] = Math.max(0, (catTotals[cat.id] ?? 0) / monthCount);
     }
     return result;
-  }, [importedTransactions]);
+  }, [filteredTransactions]);
 
   const hasActuals = actualMonthlyByCategory !== null;
 
@@ -1289,7 +1296,7 @@ export default function ExpensesPanel() {
       {activeTab === 'fire' && renderFIRE()}
       {activeTab === 'spending' && (
         <ExpenseImportPanel
-          transactions={importedTransactions}
+          transactions={filteredTransactions}
           meta={importedMeta}
           onDataChange={handleImportDataChange}
         />

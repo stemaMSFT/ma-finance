@@ -506,7 +506,11 @@ export default function ExpenseImportPanel({ transactions: propTransactions, met
         monthlyAvg: total / (yearMonths.get(year) ?? 1),
       }));
 
-    return { monthlyData, catData, totalSpend, totalRefunds, netSpend, avgMonthly, monthCount, momChange, yoyData };
+    // Actual date range from filtered data
+    const dates = transactions.map(t => t.date).sort();
+    const dateRange = { start: dates[0] ?? '', end: dates[dates.length - 1] ?? '' };
+
+    return { monthlyData, catData, totalSpend, totalRefunds, netSpend, avgMonthly, monthCount, momChange, yoyData, dateRange };
   }, [imported, transactions]);
 
   if (imported && transactions.length > 0 && analytics) {
@@ -518,7 +522,7 @@ export default function ExpenseImportPanel({ transactions: propTransactions, met
             <div>
               <h3 style={S.title}>📊 Spending Trends</h3>
               <p style={S.subtitle}>
-                {meta?.filename} • {meta?.dateRange.start} → {meta?.dateRange.end} • {analytics.monthCount} months
+                {analytics.dateRange.start} → {analytics.dateRange.end} • {analytics.monthCount} months
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
