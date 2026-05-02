@@ -172,6 +172,9 @@ export default function ExpensesPanel() {
   // Savings allocation buckets
   const [allocations, setAllocations] = useState<Record<string, number>>(getDefaultAllocations);
 
+  // Expanded category dropdowns (for recent transactions)
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+
   // ── Fetch imported data on mount ─────────────────────────────────
   useEffect(() => {
     fetch('/api/expenses', { credentials: 'include' })
@@ -225,6 +228,30 @@ export default function ExpensesPanel() {
   }, [filteredTransactions]);
 
   const hasActuals = actualMonthlyByCategory !== null;
+
+  // Recent transactions by category (past ~30 days) for dropdown detail
+  const recentByCat = useMemo(() => {
+    if (filteredTransactions.length === 0) return null;
+    // Find the most recent month with data
+    const months = [...new Set(filteredTransactions.map(t => t.date.slice(0, 7)))].sort();
+    const latestMonth = months[months.length - 1];
+    if (!latestMonth) return null;
+
+    const result: Record<string, Transaction[]> = {};
+    for (const t of filteredTransactions) {
+      if (t.date.slice(0, 7) !== latestMonth) continue;
+      if (t.transactionType !== 'expense' && t.transactionType !== 'refund') continue;
+      if (t.mappedCategory === '__transfer') continue;
+      const cat = t.mappedCategory;
+      if (!result[cat]) result[cat] = [];
+      result[cat].push(t);
+    }
+    // Sort each category by date desc
+    for (const cat of Object.keys(result)) {
+      result[cat].sort((a, b) => b.date.localeCompare(a.date));
+    }
+    return { month: latestMonth, data: result };
+  }, [filteredTransactions]);
 
   // Effective expenses: either slider values or actual averages
   const effectiveExpenses = useMemo(() => {
@@ -515,6 +542,64 @@ export default function ExpensesPanel() {
                       style={sliderTrack(color, pct)}
                     />
                     <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>{cat.description}</div>
+                    {/* Recent transactions dropdown */}
+                    {recentByCat && recentByCat.data[cat.id] && recentByCat.data[cat.id].length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          onClick={() => setExpandedCats(prev => {
+                            const next = new Set(prev);
+                            if (next.has(cat.id)) next.delete(cat.id); else next.add(cat.id);
+                            return next;
+                          })}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: COLORS.accent,
+                            padding: '2px 0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <span style={{ transition: 'transform 0.15s', transform: expandedCats.has(cat.id) ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}>▸</span>
+                          {recentByCat.data[cat.id].length} transactions in {new Date(recentByCat.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </button>
+                        {expandedCats.has(cat.id) && (
+                          <div style={{
+                            marginTop: 6,
+                            background: COLORS.bgPage,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: 8,
+                            maxHeight: 220,
+                            overflowY: 'auto',
+                          }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: `1px solid ${COLORS.border}`, color: COLORS.textMuted, fontWeight: 600, fontSize: 10 }}>Date</th>
+                                  <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: `1px solid ${COLORS.border}`, color: COLORS.textMuted, fontWeight: 600, fontSize: 10 }}>Description</th>
+                                  <th style={{ textAlign: 'right', padding: '6px 10px', borderBottom: `1px solid ${COLORS.border}`, color: COLORS.textMuted, fontWeight: 600, fontSize: 10 }}>Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {recentByCat.data[cat.id].map((t, idx) => (
+                                  <tr key={idx} style={{ borderBottom: `1px solid ${COLORS.border}20` }}>
+                                    <td style={{ padding: '5px 10px', color: COLORS.textSecondary, whiteSpace: 'nowrap' }}>{t.date.slice(5)}</td>
+                                    <td style={{ padding: '5px 10px', color: COLORS.textPrimary, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</td>
+                                    <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: t.transactionType === 'refund' ? COLORS.green : COLORS.textPrimary }}>
+                                      {t.transactionType === 'refund' ? '+' : ''}{formatCurrency(t.amount)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
