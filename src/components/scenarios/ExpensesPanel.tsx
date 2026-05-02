@@ -24,6 +24,7 @@ import {
   calculateAllocation,
 } from '../../engine/expenses';
 import type { ExpenseGroup, SavingsBucketGroup } from '../../engine/types';
+import ExpenseImportPanel from './ExpenseImportPanel';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
@@ -106,13 +107,14 @@ const pillBtn = (active: boolean): React.CSSProperties => ({
 });
 
 // ── Helpers ────────────────────────────────────────────────────────
-type TabId = 'budget' | 'breakdown' | 'savings' | 'fire';
+type TabId = 'budget' | 'breakdown' | 'savings' | 'fire' | 'import';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'budget', label: 'Budget' },
   { id: 'breakdown', label: 'Breakdown' },
   { id: 'savings', label: 'Savings' },
   { id: 'fire', label: 'FIRE Impact' },
+  { id: 'import', label: 'Import' },
 ];
 
 const sliderTrack = (color: string, pct: number): React.CSSProperties => ({
@@ -1079,6 +1081,7 @@ export default function ExpensesPanel() {
       {activeTab === 'breakdown' && renderBreakdown()}
       {activeTab === 'savings' && renderSavings()}
       {activeTab === 'fire' && renderFIRE()}
+      {activeTab === 'import' && <ExpenseImportPanel />}
     </div>
   );
 }

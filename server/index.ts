@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import scenarioRoutes from './routes/scenarios.ts';
 import calculationRoutes from './routes/calculations.ts';
+import expenseRoutes from './routes/expenses.ts';
 import authRoutes from './routes/auth.ts';
 import { requireAuth } from './middleware/auth.ts';
 import { errorHandler } from './middleware/errorHandler.ts';
@@ -49,6 +50,7 @@ app.get('/api/health', (_req, res) => {
 // ── Protected API routes ──────────────────────────────────────────
 app.use('/api/scenarios', requireAuth, scenarioRoutes);
 app.use('/api/calculate', requireAuth, calculationRoutes);
+app.use('/api/expenses', requireAuth, expenseRoutes);
 
 // ── Serve frontend in production ──────────────────────────────────
 if (isProd) {
