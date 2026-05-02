@@ -83,6 +83,7 @@ const CATEGORY_MAP: Record<string, string> = {
 const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   // Housing: mortgage, rent, HOA, property tax
   [/mortgage/i, 'housing'],
+  [/\bpennymac\b/i, 'housing'],
   [/\brent\b/i, 'housing'],
   [/\bhoa\b/i, 'housing'],
   [/property.?tax/i, 'housing'],
@@ -93,6 +94,9 @@ const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   [/\bstate\s*farm\b/i, 'insurance'],
   [/\ballstate\b/i, 'insurance'],
   [/\busaa\b/i, 'insurance'],
+
+  // Auto loans
+  [/wells\s*fargo\s*auto/i, 'transportation'],
 
   // Subscriptions: streaming, software
   [/\bspotify\b/i, 'subscriptions'],
