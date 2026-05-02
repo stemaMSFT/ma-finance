@@ -735,7 +735,7 @@ export default function HousingPanel() {
               label="Combined Annual Income"
               value={combinedIncome}
               onChange={setCombinedIncome}
-              helpText="Steven + Partner total gross income"
+              helpText="Steven + Sonya total gross income"
             />
           </InputGroup>
 

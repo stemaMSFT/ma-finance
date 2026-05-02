@@ -6,6 +6,7 @@ import {
   Line,
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -18,7 +19,6 @@ import CurrencyInput from '../shared/CurrencyInput';
 import PercentInput from '../shared/PercentInput';
 import InputGroup from '../shared/InputGroup';
 import BreakdownChart from '../charts/BreakdownChart';
-import ComparisonChart from '../charts/ComparisonChart';
 import { calcCompensation, type PersonComp } from '../../engine/mockEngine';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { createDefaultConfig, projectCompensationGrowth } from '../../engine/projection';
@@ -82,14 +82,14 @@ const DEFAULT_STEVEN: PersonComp = {
 };
 
 const DEFAULT_PARTNER: PersonComp = {
-  baseSalary: 120_000,
+  baseSalary: 140_000,       // MSFT L61 placeholder — update with real numbers
   bonusTargetPercent: 10,
-  rsuAnnual: 0,
+  rsuAnnual: 25_000,         // MSFT L61 typical annual stock award
   employer401kMatchPercent: 50,
-  employer401kMatchLimit: 6,
+  employer401kMatchLimit: 100, // MSFT matches 50% of full contribution
   employee401kContribution: 24_500,
-  esppDiscountPercent: 0,
-  esppContributionPercent: 0,
+  esppDiscountPercent: 15,
+  esppContributionPercent: 10,
 };
 
 interface CompHistoryEntry {
@@ -205,14 +205,6 @@ export default function CompensationPanel() {
   const activeInputs = activePerson === 'steven' ? steven : partner;
   const activeUpdate = activePerson === 'steven' ? updateSteven : updatePartner;
 
-  const combinedChartData = [
-    { name: 'Base Salary', Steven: stevenComp.baseSalary, Partner: partnerComp.baseSalary },
-    { name: 'Bonus', Steven: stevenComp.bonusAmount, Partner: partnerComp.bonusAmount },
-    { name: 'RSUs', Steven: stevenComp.rsuAnnual, Partner: partnerComp.rsuAnnual },
-    { name: 'ESPP', Steven: stevenComp.esppBenefit, Partner: partnerComp.esppBenefit },
-    { name: '401k Match', Steven: stevenComp.employer401kMatch, Partner: partnerComp.employer401kMatch },
-  ].filter((d) => d.Steven + d.Partner > 0);
-
   // Projections tab — forward-looking comp from engine
   const compProjection = useMemo(() => {
     const cfg = createDefaultConfig();
@@ -265,67 +257,197 @@ export default function CompensationPanel() {
           <div style={{
             background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
             borderRadius: 18, padding: '32px 36px', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
-            boxShadow: '0 4px 24px rgba(0,0,0,0.12)', flexWrap: 'wrap',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
           }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 500, marginBottom: 6 }}>
-                Household Total Compensation
-              </div>
-              <div style={{ fontSize: 48, fontWeight: 800, letterSpacing: -2, lineHeight: 1.1 }}>
-                {formatCurrency(householdTotal)}
-              </div>
-              <div style={{ fontSize: 13, color: '#64748b', marginTop: 10 }}>
-                Steven {formatCurrency(stevenComp.totalComp, true)} + Partner {formatCurrency(partnerComp.totalComp, true)}
-              </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 500, marginBottom: 6 }}>
+              Household Total Compensation
             </div>
-            <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Combined Base</div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{formatCurrency(steven.baseSalary + partner.baseSalary, true)}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Steven Share</div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{formatPercent((stevenComp.totalComp / householdTotal) * 100, 0)}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Partner Share</div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{formatPercent((partnerComp.totalComp / householdTotal) * 100, 0)}</div>
-              </div>
+            <div style={{ fontSize: 48, fontWeight: 800, letterSpacing: -2, lineHeight: 1.1 }}>
+              {formatCurrency(householdTotal)}
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 8 }}>
+              {formatCurrency(householdTotal / 12, true)}/mo gross
             </div>
           </div>
 
-          {/* Per-person metric cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-            {[
-              { label: "Steven's Total Comp", value: formatCurrency(stevenComp.totalComp), sub: `${formatCurrency(stevenComp.baseSalary, true)} base`, accent: COLORS.steven },
-              { label: "Partner's Total Comp", value: formatCurrency(partnerComp.totalComp), sub: `${formatCurrency(partnerComp.baseSalary, true)} base`, accent: COLORS.partner },
-              { label: "Steven's Bonus", value: formatCurrency(stevenComp.bonusAmount), sub: `${formatPercent(steven.bonusTargetPercent, 0)} of base`, accent: COLORS.orange },
-              { label: "Steven's RSUs + ESPP", value: formatCurrency(stevenComp.rsuAnnual + stevenComp.esppBenefit), sub: 'equity & ESPP benefit', accent: COLORS.optimistic },
-              { label: 'Total 401k Match', value: formatCurrency(stevenComp.employer401kMatch + partnerComp.employer401kMatch), sub: 'combined employer match', accent: COLORS.base },
-              { label: 'Monthly Household', value: formatCurrency(householdTotal / 12, true), sub: 'gross est. per month', accent: COLORS.conservative },
-            ].map((m) => (
-              <div key={m.label} style={{ ...S.card, borderLeft: `3px solid ${m.accent}`, padding: '18px 20px' }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.textPrimary, letterSpacing: '-0.02em' }}>{m.value}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, marginTop: 4 }}>{m.label}</div>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{m.sub}</div>
+          {/* Side-by-side person cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {([
+              { name: 'Steven', comp: stevenComp, inputs: steven, color: COLORS.steven },
+              { name: 'Sonya', comp: partnerComp, inputs: partner, color: COLORS.partner },
+            ] as const).map(({ name, comp, inputs, color }) => (
+              <div key={name} style={{
+                ...S.card, borderTop: `3px solid ${color}`, padding: '20px 24px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary }}>👤 {name}</div>
+                  <div style={{ fontSize: 11, color: COLORS.textMuted }}>
+                    {householdTotal > 0 ? formatPercent((comp.totalComp / householdTotal) * 100, 0) : '—'} of household
+                  </div>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.textPrimary, letterSpacing: -1, marginBottom: 16 }}>
+                  {formatCurrency(comp.totalComp)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {[
+                    { label: 'Base', value: comp.baseSalary },
+                    { label: 'Bonus', value: comp.bonusAmount },
+                    { label: 'RSUs', value: comp.rsuAnnual },
+                    { label: 'ESPP Benefit', value: comp.esppBenefit },
+                    { label: '401k Match', value: comp.employer401kMatch },
+                    { label: '401k Contrib', value: inputs.employee401kContribution },
+                  ].map((m) => (
+                    <div key={m.label} style={{ padding: '8px 0', borderBottom: `1px solid ${COLORS.border}` }}>
+                      <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{m.label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: m.value > 0 ? COLORS.textPrimary : COLORS.textMuted }}>
+                        {m.value > 0 ? formatCurrency(m.value, true) : '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
 
-          {/* Comparison chart */}
+          {/* Combined benefits summary */}
           <div style={S.card}>
-            <div style={S.cardTitle}>Household Comp Comparison</div>
-            <p style={S.cardSub}>Side-by-side breakdown by comp component</p>
-            <ComparisonChart
-              data={combinedChartData}
-              bars={[
-                { dataKey: 'Steven', label: 'Steven', color: COLORS.steven },
-                { dataKey: 'Partner', label: 'Partner', color: COLORS.partner },
-              ]}
-              xKey="name"
-              height={280}
-            />
+            <div style={S.cardTitle}>Combined Household Benefits</div>
+            <p style={S.cardSub}>Both MSFT employees — doubled tax-advantaged limits and employer benefits</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              {[
+                {
+                  label: '401k Contributions',
+                  steven: steven.employee401kContribution,
+                  partner: partner.employee401kContribution,
+                  note: '2× the $24.5k limit',
+                  color: COLORS.accent,
+                },
+                {
+                  label: 'Employer 401k Match',
+                  steven: stevenComp.employer401kMatch,
+                  partner: partnerComp.employer401kMatch,
+                  note: 'Free money from MSFT',
+                  color: COLORS.base,
+                },
+                {
+                  label: 'RSU Annual Vest',
+                  steven: stevenComp.rsuAnnual,
+                  partner: partnerComp.rsuAnnual,
+                  note: 'Combined equity compensation',
+                  color: COLORS.optimistic,
+                },
+                {
+                  label: 'ESPP Benefit',
+                  steven: stevenComp.esppBenefit,
+                  partner: partnerComp.esppBenefit,
+                  note: '15% stock discount × 2',
+                  color: COLORS.teal,
+                },
+              ].map((b) => {
+                const total = b.steven + b.partner;
+                return (
+                  <div key={b.label} style={{
+                    padding: '16px 18px', background: `${b.color}08`,
+                    borderRadius: 10, borderLeft: `3px solid ${b.color}`,
+                  }}>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                      {b.label}
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 4 }}>
+                      {formatCurrency(total, true)}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>
+                      <span style={{ color: COLORS.steven }}>S: {formatCurrency(b.steven, true)}</span>
+                      <span style={{ color: COLORS.textMuted }}>+</span>
+                      <span style={{ color: COLORS.partner }}>So: {formatCurrency(b.partner, true)}</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: COLORS.textMuted }}>{b.note}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Stacked household comp by component */}
+          <div style={S.card}>
+            <div style={S.cardTitle}>Household Income Stack</div>
+            <p style={S.cardSub}>How each component contributes to total household comp</p>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart
+                data={[
+                  { name: 'Base Salary', Steven: stevenComp.baseSalary, Sonya: partnerComp.baseSalary },
+                  { name: 'Bonus', Steven: stevenComp.bonusAmount, Sonya: partnerComp.bonusAmount },
+                  { name: 'RSUs', Steven: stevenComp.rsuAnnual, Sonya: partnerComp.rsuAnnual },
+                  { name: 'ESPP', Steven: stevenComp.esppBenefit, Sonya: partnerComp.esppBenefit },
+                  { name: '401k Match', Steven: stevenComp.employer401kMatch, Sonya: partnerComp.employer401kMatch },
+                ].filter(d => d.Steven + d.Sonya > 0)}
+                layout="vertical"
+                margin={{ top: 8, right: 30, left: 90, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <XAxis type="number" tickFormatter={(v: number) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: COLORS.textPrimary, fontWeight: 500 }} axisLine={false} tickLine={false} width={85} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={8} />
+                <Bar dataKey="Steven" name="Steven" stackId="comp" fill={COLORS.steven} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Sonya" name="Sonya" stackId="comp" fill={COLORS.partner} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Household comp waterfall — total comp buildup */}
+          <div style={S.card}>
+            <div style={S.cardTitle}>Total Comp Buildup</div>
+            <p style={S.cardSub}>How household comp stacks up from base to total</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart
+                data={(() => {
+                  const items = [
+                    { name: 'Base (2×)', value: stevenComp.baseSalary + partnerComp.baseSalary, color: COLORS.accent },
+                    { name: 'Bonus (2×)', value: stevenComp.bonusAmount + partnerComp.bonusAmount, color: COLORS.teal },
+                    { name: 'RSUs (2×)', value: stevenComp.rsuAnnual + partnerComp.rsuAnnual, color: COLORS.optimistic },
+                    { name: 'ESPP (2×)', value: stevenComp.esppBenefit + partnerComp.esppBenefit, color: COLORS.orange },
+                    { name: '401k Match (2×)', value: stevenComp.employer401kMatch + partnerComp.employer401kMatch, color: COLORS.base },
+                  ].filter(i => i.value > 0);
+                  let running = 0;
+                  const data = items.map(i => {
+                    const d = { name: i.name, base: running, value: i.value, color: i.color };
+                    running += i.value;
+                    return d;
+                  });
+                  data.push({ name: 'Total', base: 0, value: running, color: COLORS.textPrimary });
+                  return data;
+                })()}
+                margin={{ top: 8, right: 20, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: COLORS.textSecondary }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v: number) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} tickLine={false} width={68} />
+                <Tooltip
+                  formatter={(value: number, name: string) => {
+                    if (name === 'base') return [null, null];
+                    return [formatCurrency(value), 'Amount'];
+                  }}
+                  cursor={{ fill: 'rgba(108,99,255,0.04)' }}
+                />
+                <Bar dataKey="base" stackId="waterfall" fill="transparent" />
+                <Bar dataKey="value" stackId="waterfall" radius={[4, 4, 0, 0]}>
+                  {(() => {
+                    const items = [
+                      { value: stevenComp.baseSalary + partnerComp.baseSalary, color: COLORS.accent },
+                      { value: stevenComp.bonusAmount + partnerComp.bonusAmount, color: COLORS.teal },
+                      { value: stevenComp.rsuAnnual + partnerComp.rsuAnnual, color: COLORS.optimistic },
+                      { value: stevenComp.esppBenefit + partnerComp.esppBenefit, color: COLORS.orange },
+                      { value: stevenComp.employer401kMatch + partnerComp.employer401kMatch, color: COLORS.base },
+                    ].filter(i => i.value > 0);
+                    items.push({ value: 0, color: COLORS.textPrimary });
+                    return items.map((item, idx) => (
+                      <Cell key={idx} fill={item.color} />
+                    ));
+                  })()}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
@@ -334,166 +456,95 @@ export default function CompensationPanel() {
       {activeTab === 'breakdown' && !isRecalculating && (
         <div style={S.sectionGap}>
 
-          {/* Person selector */}
-          <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 10, padding: 3, maxWidth: 300 }}>
-            {(['steven', 'partner'] as const).map((p) => {
-              const active = activePerson === p;
-              return (
-                <button key={p} onClick={() => setActivePerson(p)}
-                  style={{
-                    flex: 1, padding: '8px 14px', borderRadius: 8, border: 'none',
-                    background: active ? '#fff' : 'transparent',
-                    color: active ? (p === 'steven' ? COLORS.steven : COLORS.partner) : COLORS.textSecondary,
-                    fontWeight: active ? 600 : 400, fontSize: 13, cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                  }}>
-                  👤 {p === 'steven' ? 'Steven' : 'Partner'}
-                </button>
-              );
-            })}
+          {/* Side-by-side inputs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {/* Steven inputs */}
+            <div style={S.sectionGap}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
+                background: `${COLORS.steven}10`, borderRadius: 10, borderLeft: `3px solid ${COLORS.steven}`,
+              }}>
+                <span style={{ fontSize: 14 }}>👤</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.steven }}>Steven</span>
+                <span style={{ fontSize: 12, color: COLORS.textMuted, marginLeft: 'auto' }}>{formatCurrency(stevenComp.totalComp, true)} total</span>
+              </div>
+              <InputGroup title="Cash Comp" helpText="Base salary and bonus target.">
+                <CurrencyInput label="Base Salary" value={steven.baseSalary} onChange={(v) => updateSteven('baseSalary', v)} step={5000} />
+                <PercentInput label="Bonus Target %" value={steven.bonusTargetPercent} onChange={(v) => updateSteven('bonusTargetPercent', v)} min={0} max={100} helpText="Target bonus as % of base" />
+                <CurrencyInput label="RSU Annual Grant" value={steven.rsuAnnual} onChange={(v) => updateSteven('rsuAnnual', v)} helpText="Total RSU value vesting per year" />
+              </InputGroup>
+              <InputGroup title="401(k)" tooltip="MSFT matches 50% of your full contribution.">
+                <PercentInput label="Match Rate" value={steven.employer401kMatchPercent} onChange={(v) => updateSteven('employer401kMatchPercent', v)} min={0} max={100} helpText="50 = 50¢ per dollar" />
+                <PercentInput label="Match Limit (% of salary)" value={steven.employer401kMatchLimit} onChange={(v) => updateSteven('employer401kMatchLimit', v)} min={0} max={100} />
+              </InputGroup>
+              <InputGroup title="ESPP" tooltip="Buy MSFT stock at 15% discount.">
+                <PercentInput label="Discount %" value={steven.esppDiscountPercent} onChange={(v) => updateSteven('esppDiscountPercent', v)} min={0} max={25} />
+                <PercentInput label="Contribution %" value={steven.esppContributionPercent} onChange={(v) => updateSteven('esppContributionPercent', v)} min={0} max={15} />
+              </InputGroup>
+            </div>
+
+            {/* Partner inputs */}
+            <div style={S.sectionGap}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
+                background: `${COLORS.partner}10`, borderRadius: 10, borderLeft: `3px solid ${COLORS.partner}`,
+              }}>
+                <span style={{ fontSize: 14 }}>👤</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.partner }}>Sonya</span>
+                <span style={{ fontSize: 12, color: COLORS.textMuted, marginLeft: 'auto' }}>{formatCurrency(partnerComp.totalComp, true)} total</span>
+              </div>
+              <InputGroup title="Cash Comp" helpText="Base salary and bonus target.">
+                <CurrencyInput label="Base Salary" value={partner.baseSalary} onChange={(v) => updatePartner('baseSalary', v)} step={5000} />
+                <PercentInput label="Bonus Target %" value={partner.bonusTargetPercent} onChange={(v) => updatePartner('bonusTargetPercent', v)} min={0} max={100} helpText="Target bonus as % of base" />
+                <CurrencyInput label="RSU Annual Grant" value={partner.rsuAnnual} onChange={(v) => updatePartner('rsuAnnual', v)} helpText="Total RSU value vesting per year" />
+              </InputGroup>
+              <InputGroup title="401(k)" tooltip="MSFT matches 50% of your full contribution.">
+                <PercentInput label="Match Rate" value={partner.employer401kMatchPercent} onChange={(v) => updatePartner('employer401kMatchPercent', v)} min={0} max={100} helpText="50 = 50¢ per dollar" />
+                <PercentInput label="Match Limit (% of salary)" value={partner.employer401kMatchLimit} onChange={(v) => updatePartner('employer401kMatchLimit', v)} min={0} max={100} />
+              </InputGroup>
+              <InputGroup title="ESPP" tooltip="Buy MSFT stock at 15% discount.">
+                <PercentInput label="Discount %" value={partner.esppDiscountPercent} onChange={(v) => updatePartner('esppDiscountPercent', v)} min={0} max={25} />
+                <PercentInput label="Contribution %" value={partner.esppContributionPercent} onChange={(v) => updatePartner('esppContributionPercent', v)} min={0} max={15} />
+              </InputGroup>
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
-            {/* Inputs */}
-            <div style={S.sectionGap}>
-              <InputGroup
-                title={activePerson === 'steven' ? 'Steven' : 'Partner'}
-                helpText="Enter compensation details to see your full picture."
-              >
-                <CurrencyInput
-                  label="Base Salary"
-                  value={activeInputs.baseSalary}
-                  onChange={(v) => activeUpdate('baseSalary', v)}
-                  step={5000}
-                />
-                <PercentInput
-                  label="Bonus Target %"
-                  value={activeInputs.bonusTargetPercent}
-                  onChange={(v) => activeUpdate('bonusTargetPercent', v)}
-                  min={0} max={100}
-                  helpText="Target bonus as % of base salary"
-                />
-                <CurrencyInput
-                  label="RSU Annual Grant Value"
-                  value={activeInputs.rsuAnnual}
-                  onChange={(v) => activeUpdate('rsuAnnual', v)}
-                  helpText="Total RSU value vesting in one year"
-                />
-              </InputGroup>
-
-              <InputGroup
-                title="401(k) Match"
-                tooltip="Employer match is essentially free money — always contribute enough to capture the full match."
-              >
-                <PercentInput
-                  label="Employer Match Rate"
-                  value={activeInputs.employer401kMatchPercent}
-                  onChange={(v) => activeUpdate('employer401kMatchPercent', v)}
-                  min={0} max={100}
-                  helpText="e.g. 50 = 50¢ per dollar you contribute"
-                />
-                <PercentInput
-                  label="Match Limit (% of salary)"
-                  value={activeInputs.employer401kMatchLimit}
-                  onChange={(v) => activeUpdate('employer401kMatchLimit', v)}
-                  min={0} max={100}
-                  helpText="Max % of salary the employer will match on"
-                />
-              </InputGroup>
-
-              <InputGroup
-                title="ESPP"
-                tooltip="ESPP lets you buy company stock at a discount — typically 10–15% below market. It's often the highest guaranteed return available."
-              >
-                <PercentInput
-                  label="ESPP Discount %"
-                  value={activeInputs.esppDiscountPercent}
-                  onChange={(v) => activeUpdate('esppDiscountPercent', v)}
-                  min={0} max={25}
-                />
-                <PercentInput
-                  label="ESPP Contribution % of Salary"
-                  value={activeInputs.esppContributionPercent}
-                  onChange={(v) => activeUpdate('esppContributionPercent', v)}
-                  min={0} max={15}
-                />
-              </InputGroup>
-            </div>
-
-            {/* Charts + table */}
-            <div style={S.sectionGap}>
-              {/* Total comp hero */}
-              <div style={{
-                ...S.card,
-                background: `linear-gradient(135deg, ${activePerson === 'steven' ? '#6c63ff' : '#14b8a6'}18 0%, ${COLORS.bgCard} 100%)`,
-                borderLeft: `4px solid ${activePerson === 'steven' ? COLORS.steven : COLORS.partner}`,
-                padding: '20px 24px',
-              }}>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 500, marginBottom: 4 }}>
-                  Total Compensation
-                </div>
-                <div style={{ fontSize: 36, fontWeight: 800, color: COLORS.textPrimary, letterSpacing: -1 }}>
-                  {formatCurrency(activeComp.totalComp)}
-                </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
-                  {[
-                    { label: 'Base', value: activeComp.baseSalary },
-                    { label: 'Bonus', value: activeComp.bonusAmount },
-                    { label: 'RSUs', value: activeComp.rsuAnnual },
-                    { label: '401k', value: activeComp.employer401kMatch },
-                  ].map((m) => (
-                    <div key={m.label}>
-                      <div style={{ fontSize: 10, color: COLORS.textMuted }}>{m.label}</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{formatCurrency(m.value, true)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Pie chart */}
-              <div style={S.card}>
-                <div style={S.cardTitle}>Comp Breakdown</div>
-                <BreakdownChart
-                  data={activeComp.breakdown}
-                  centerLabel="Total Comp"
-                  centerValue={formatCurrency(activeComp.totalComp, true)}
-                  height={260}
-                />
-              </div>
-
-              {/* Detail table */}
-              <div style={S.card}>
-                <div style={S.cardTitle}>Comp Detail</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 8 }}>
-                  <tbody>
-                    {activeComp.breakdown.map((row) => (
-                      <tr key={row.name} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                        <td style={{ padding: '10px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: row.color, display: 'inline-block', flexShrink: 0 }} />
-                          <span style={{ color: COLORS.textPrimary }}>{row.name}</span>
-                        </td>
-                        <td style={{ textAlign: 'right', padding: '10px 0', fontWeight: 500, color: COLORS.textPrimary }}>
-                          {formatCurrency(row.value)}
-                        </td>
-                        <td style={{ textAlign: 'right', padding: '10px 0 10px 16px', color: COLORS.textMuted, fontSize: 11 }}>
-                          {activeComp.totalComp > 0
-                            ? formatPercent((row.value / activeComp.totalComp) * 100, 1)
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr>
-                      <td style={{ padding: '10px 0', fontWeight: 700, color: COLORS.textPrimary }}>Total</td>
-                      <td style={{ textAlign: 'right', padding: '10px 0', fontWeight: 700, color: COLORS.textPrimary }}>
-                        {formatCurrency(activeComp.totalComp)}
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '10px 0 10px 16px', color: COLORS.textMuted, fontSize: 11 }}>100%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {/* Combined summary table */}
+          <div style={S.card}>
+            <div style={S.cardTitle}>Household Comp Summary</div>
+            <p style={S.cardSub}>All values are annual</p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 8 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: COLORS.textMuted, fontWeight: 600 }}>Component</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 11, color: COLORS.steven, fontWeight: 600 }}>Steven</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 11, color: COLORS.partner, fontWeight: 600 }}>Sonya</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 11, color: COLORS.textPrimary, fontWeight: 700 }}>Household</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: 'Base Salary', s: stevenComp.baseSalary, p: partnerComp.baseSalary },
+                  { label: 'Bonus', s: stevenComp.bonusAmount, p: partnerComp.bonusAmount },
+                  { label: 'RSUs', s: stevenComp.rsuAnnual, p: partnerComp.rsuAnnual },
+                  { label: 'ESPP Benefit', s: stevenComp.esppBenefit, p: partnerComp.esppBenefit },
+                  { label: '401k Match', s: stevenComp.employer401kMatch, p: partnerComp.employer401kMatch },
+                ].map((row) => (
+                  <tr key={row.label} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                    <td style={{ padding: '10px 12px', color: COLORS.textPrimary }}>{row.label}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 12px', color: COLORS.textPrimary }}>{formatCurrency(row.s)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 12px', color: COLORS.textPrimary }}>{formatCurrency(row.p)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: COLORS.textPrimary }}>{formatCurrency(row.s + row.p)}</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop: `2px solid ${COLORS.border}` }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: COLORS.textPrimary }}>Total Comp</td>
+                  <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: COLORS.steven }}>{formatCurrency(stevenComp.totalComp)}</td>
+                  <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: COLORS.partner }}>{formatCurrency(partnerComp.totalComp)}</td>
+                  <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 800, color: COLORS.textPrimary, fontSize: 15 }}>{formatCurrency(householdTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       )}

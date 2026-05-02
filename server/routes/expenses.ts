@@ -32,107 +32,75 @@ const upload = multer({
 });
 
 // ── Category Mapping ──────────────────────────────────────────────
+// Maps actual Rocket Money categories to the app's 15 budget categories.
 
 const CATEGORY_MAP: Record<string, string> = {
   // Essential
-  'rent': 'housing',
-  'mortgage': 'housing',
-  'housing': 'housing',
-  'home': 'housing',
-  'transportation': 'transportation',
-  'gas': 'transportation',
-  'auto': 'transportation',
-  'car': 'transportation',
-  'parking': 'transportation',
-  'ride share': 'transportation',
-  'uber': 'transportation',
-  'lyft': 'transportation',
-  'utilities': 'utilities',
-  'electric': 'utilities',
-  'internet': 'utilities',
-  'phone': 'utilities',
-  'water': 'utilities',
   'groceries': 'groceries',
-  'grocery': 'groceries',
-  'healthcare': 'healthcare',
-  'health': 'healthcare',
+  'auto & transport': 'transportation',
+  'bills & utilities': 'utilities',
+  'home & garden': 'housing',
   'medical': 'healthcare',
-  'pharmacy': 'healthcare',
-  'doctor': 'healthcare',
-  'dental': 'healthcare',
+  'health & wellness': 'healthcare',
   'insurance': 'insurance',
 
   // Lifestyle
-  'restaurants': 'dining',
-  'restaurant': 'dining',
-  'dining': 'dining',
-  'food & drink': 'dining',
-  'food': 'dining',
-  'coffee': 'dining',
-  'fast food': 'dining',
-  'subscriptions': 'subscriptions',
-  'subscription': 'subscriptions',
-  'streaming': 'subscriptions',
-  'software': 'subscriptions',
-  'gym': 'subscriptions',
-  'membership': 'subscriptions',
+  'dining & drinks': 'dining',
   'shopping': 'shopping',
-  'clothing': 'shopping',
-  'electronics': 'shopping',
-  'amazon': 'shopping',
-  'entertainment': 'entertainment',
-  'travel': 'entertainment',
-  'vacation': 'entertainment',
-  'hobbies': 'entertainment',
+  'entertainment & rec.': 'entertainment',
+  'travel & vacation': 'entertainment',
+  'software & tech': 'subscriptions',
   'personal care': 'personalCare',
-  'personal': 'personalCare',
-  'beauty': 'personalCare',
-  'hair': 'personalCare',
+  'pets': 'misc',
+  'trading cards': 'entertainment',
 
   // Obligations
-  'debt': 'debt',
-  'loan': 'debt',
-  'student loan': 'debt',
-  'credit card payment': 'debt',
+  'loan payment': 'debt',
+  'fees': 'debt',
+  'taxes': 'misc',
+  'legal': 'misc',
+  'charitable donations': 'gifts',
   'gifts': 'gifts',
-  'donation': 'gifts',
-  'charitable': 'gifts',
-  'charity': 'gifts',
-
-  // Future
-  'childcare': 'childcare',
   'education': 'childcare',
-  'tuition': 'childcare',
+  'family care': 'childcare',
 
-  // Transfers / excluded
-  'transfer': '__transfer',
-  'credit card': '__transfer',
-  'payment': '__transfer',
-  'internal transfer': '__transfer',
+  // Excluded from spending
+  'credit card payment': '__transfer',
+  'internal transfers': '__transfer',
+  'savings transfer': '__transfer',
+  'income': '__income',
+  'investment': '__transfer',
+  'cash & checks': '__transfer',
+  'ignore': '__transfer',
+  'business': '__transfer',
 };
 
 function mapCategory(raw: string): string {
   const normalized = raw.trim().toLowerCase();
-  // Direct match
+  // Direct match first
   if (CATEGORY_MAP[normalized]) return CATEGORY_MAP[normalized];
-  // Partial match
+  // Partial match fallback
   for (const [key, mapped] of Object.entries(CATEGORY_MAP)) {
-    if (normalized.includes(key)) return mapped;
+    if (normalized.includes(key) || key.includes(normalized)) return mapped;
   }
   return 'misc';
 }
 
 function classifyTransaction(amount: number, rawCategory: string): TransactionType {
-  const norm = rawCategory.trim().toLowerCase();
-  if (norm.includes('transfer') || norm.includes('payment') || norm === 'credit card') {
-    return 'transfer';
-  }
-  if (amount > 0) {
-    // Positive in Rocket Money = income or refund
+  const mapped = mapCategory(rawCategory);
+
+  // Transfers and internal moves
+  if (mapped === '__transfer') return 'transfer';
+  // Income
+  if (mapped === '__income') return 'income';
+
+  // Rocket Money: positive = expense, negative = credit/refund/income
+  if (amount < 0) {
+    const norm = rawCategory.trim().toLowerCase();
     if (norm.includes('refund') || norm.includes('return') || norm.includes('reimbursement')) {
       return 'refund';
     }
-    return 'income';
+    return 'refund'; // negative amounts on expense categories are credits/refunds
   }
   return 'expense';
 }
@@ -165,13 +133,15 @@ function parseCSV(buffer: Buffer, _filename: string): ParseResult {
     const row = records[i];
     const rowNum = i + 2; // +2 for 1-indexed + header row
 
-    // Find columns (case-insensitive)
+    // Find columns — supports actual Rocket Money format and generic CSV
     const date = row['Date'] ?? row['date'] ?? row['DATE'];
-    const desc = row['Description'] ?? row['description'] ?? row['Merchant'] ?? row['merchant'] ?? row['Original Description'] ?? '';
+    const desc = row['Custom Name'] || row['Name'] || row['Description'] || row['description'] || row['Merchant'] || '';
     const category = row['Category'] ?? row['category'] ?? '';
     const amountStr = row['Amount'] ?? row['amount'] ?? '';
-    const account = row['Account'] ?? row['account'] ?? row['Account Name'] ?? '';
-    const notes = row['Notes'] ?? row['notes'] ?? '';
+    const account = row['Account Name'] || row['Account'] || row['account'] || '';
+    const institution = row['Institution Name'] || '';
+    const notes = row['Note'] || row['Notes'] || row['notes'] || '';
+    const accountLabel = institution ? `${institution} – ${account}` : account;
 
     // Validate required fields
     if (!date || !amountStr) {
@@ -205,8 +175,8 @@ function parseCSV(buffer: Buffer, _filename: string): ParseResult {
       description: desc || 'Unknown',
       rawCategory: category || 'Uncategorized',
       mappedCategory,
-      amount: Math.abs(amount), // Store as positive, type indicates direction
-      account: account || 'Unknown',
+      amount: Math.abs(amount),
+      account: accountLabel || 'Unknown',
       notes: notes || undefined,
       transactionType,
     });

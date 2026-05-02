@@ -51,7 +51,7 @@ export const STEVEN_PROFILE: UserProfile = {
 };
 
 export const SPOUSE_PROFILE: UserProfile = {
-  name: 'Wife',
+  name: 'Sonya',
   age: 33,
   annualIncome: 120_000,
   filingStatus: 'married_filing_jointly',

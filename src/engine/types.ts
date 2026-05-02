@@ -17,7 +17,7 @@ export interface UserProfile {
 
 export interface HouseholdFinances {
   primary: UserProfile;      // Steven
-  spouse: UserProfile;       // Wife
+  spouse: UserProfile;       // Sonya
   jointAccounts: {
     checkingSavings: number;
     taxableBrokerage: number;

@@ -148,7 +148,7 @@ export default function ExpensesPanel() {
 
   // Income inputs
   const [stevenIncome, setStevenIncome] = useState(210_000);
-  const [spouseIncome, setSpouseIncome] = useState(120_000);
+  const [spouseIncome, setSpouseIncome] = useState(185_000); // MSFT L61 total comp placeholder
   const householdIncome = stevenIncome + spouseIncome;
 
   // FIRE params
@@ -620,7 +620,7 @@ export default function ExpensesPanel() {
               />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Spouse&apos;s Income</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Sonya&apos;s Income</span>
               <input
                 type="number"
                 value={spouseIncome}
