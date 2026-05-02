@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   PieChart, Pie, Cell,
   BarChart, Bar,
@@ -25,6 +25,7 @@ import {
 } from '../../engine/expenses';
 import type { ExpenseGroup, SavingsBucketGroup } from '../../engine/types';
 import ExpenseImportPanel from './ExpenseImportPanel';
+import type { Transaction, ImportMeta } from './ExpenseImportPanel';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
@@ -107,14 +108,14 @@ const pillBtn = (active: boolean): React.CSSProperties => ({
 });
 
 // ── Helpers ────────────────────────────────────────────────────────
-type TabId = 'budget' | 'breakdown' | 'savings' | 'fire' | 'import';
+type TabId = 'budget' | 'breakdown' | 'savings' | 'fire' | 'spending';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'budget', label: 'Budget' },
   { id: 'breakdown', label: 'Breakdown' },
   { id: 'savings', label: 'Savings' },
   { id: 'fire', label: 'FIRE Impact' },
-  { id: 'import', label: 'Import' },
+  { id: 'spending', label: 'Spending' },
 ];
 
 const sliderTrack = (color: string, pct: number): React.CSSProperties => ({
@@ -146,6 +147,11 @@ export default function ExpensesPanel() {
   const [expenses, setExpenses] = useState<Record<string, number>>(getDefaultExpenses);
   const [activePreset, setActivePreset] = useState('current');
 
+  // Imported data state
+  const [importedTransactions, setImportedTransactions] = useState<Transaction[]>([]);
+  const [importedMeta, setImportedMeta] = useState<ImportMeta | null>(null);
+  const [useActuals, setUseActuals] = useState(false);
+
   // Income inputs
   const [stevenIncome, setStevenIncome] = useState(210_000);
   const [spouseIncome, setSpouseIncome] = useState(185_000); // MSFT L61 total comp placeholder
@@ -159,12 +165,72 @@ export default function ExpensesPanel() {
   // Savings allocation buckets
   const [allocations, setAllocations] = useState<Record<string, number>>(getDefaultAllocations);
 
+  // ── Fetch imported data on mount ─────────────────────────────────
+  useEffect(() => {
+    fetch('/api/expenses', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.imported && data.transactions?.length > 0) {
+          setImportedTransactions(data.transactions);
+          setImportedMeta(data.meta);
+        }
+      })
+      .catch(() => { /* silently fail */ });
+  }, []);
+
+  // Callback for when import panel changes data
+  const handleImportDataChange = useCallback((data: { imported: boolean; meta: ImportMeta | null; transactions: Transaction[] }) => {
+    setImportedTransactions(data.transactions);
+    setImportedMeta(data.meta);
+    if (!data.imported) setUseActuals(false);
+  }, []);
+
+  // ── Compute actual monthly averages from imported data ───────────
+  const actualMonthlyByCategory = useMemo(() => {
+    if (importedTransactions.length === 0) return null;
+
+    const expenseTxns = importedTransactions.filter(t => t.transactionType === 'expense');
+    const refundTxns = importedTransactions.filter(t => t.transactionType === 'refund');
+
+    // Count distinct months for proper averaging
+    const months = new Set<string>();
+    for (const t of expenseTxns) months.add(t.date.slice(0, 7));
+    for (const t of refundTxns) months.add(t.date.slice(0, 7));
+    const monthCount = months.size || 1;
+
+    // Accumulate by category
+    const catTotals: Record<string, number> = {};
+    for (const t of expenseTxns) {
+      if (t.mappedCategory === '__transfer') continue;
+      catTotals[t.mappedCategory] = (catTotals[t.mappedCategory] ?? 0) + t.amount;
+    }
+    for (const t of refundTxns) {
+      if (t.mappedCategory === '__transfer') continue;
+      catTotals[t.mappedCategory] = (catTotals[t.mappedCategory] ?? 0) - t.amount;
+    }
+
+    // Convert to monthly averages
+    const result: Record<string, number> = {};
+    for (const cat of EXPENSE_CATEGORIES) {
+      result[cat.id] = Math.max(0, (catTotals[cat.id] ?? 0) / monthCount);
+    }
+    return result;
+  }, [importedTransactions]);
+
+  const hasActuals = actualMonthlyByCategory !== null;
+
+  // Effective expenses: either slider values or actual averages
+  const effectiveExpenses = useMemo(() => {
+    if (useActuals && actualMonthlyByCategory) return actualMonthlyByCategory;
+    return expenses;
+  }, [useActuals, actualMonthlyByCategory, expenses]);
+
   // ── Derived data ────────────────────────────────────────────────
-  const budget = useMemo(() => calculateBudget(expenses), [expenses]);
-  const groupTotals = useMemo(() => getGroupTotals(expenses), [expenses]);
+  const budget = useMemo(() => calculateBudget(effectiveExpenses), [effectiveExpenses]);
+  const groupTotals = useMemo(() => getGroupTotals(effectiveExpenses), [effectiveExpenses]);
   const savings = useMemo(
-    () => analyzeSavings(householdIncome, expenses),
-    [householdIncome, expenses],
+    () => analyzeSavings(householdIncome, effectiveExpenses),
+    [householdIncome, effectiveExpenses],
   );
   const fireImpact = useMemo(
     () =>
@@ -206,6 +272,17 @@ export default function ExpensesPanel() {
     setActivePreset(presetId);
   };
 
+  const handleSetToActuals = () => {
+    if (!actualMonthlyByCategory) return;
+    const clamped: Record<string, number> = {};
+    for (const cat of EXPENSE_CATEGORIES) {
+      const actual = actualMonthlyByCategory[cat.id] ?? 0;
+      clamped[cat.id] = Math.max(cat.min, Math.min(cat.max, Math.round(actual / cat.step) * cat.step));
+    }
+    setExpenses(clamped);
+    setActivePreset('');
+  };
+
   // Pie chart data
   const pieData = useMemo(
     () =>
@@ -221,13 +298,13 @@ export default function ExpensesPanel() {
   const barData = useMemo(
     () =>
       [...EXPENSE_CATEGORIES]
-        .sort((a, b) => (expenses[b.id] ?? 0) - (expenses[a.id] ?? 0))
+        .sort((a, b) => (effectiveExpenses[b.id] ?? 0) - (effectiveExpenses[a.id] ?? 0))
         .map((cat) => ({
           name: `${cat.icon} ${cat.label}`,
-          value: expenses[cat.id] ?? 0,
+          value: effectiveExpenses[cat.id] ?? 0,
           color: GROUP_COLORS[cat.group],
         })),
-    [expenses],
+    [effectiveExpenses],
   );
 
   // Savings waterfall data
@@ -269,8 +346,64 @@ export default function ExpensesPanel() {
   };
 
   // ── Render: Budget Tab ──────────────────────────────────────────
-  const renderBudget = () => (
+  const renderBudget = () => {
+    const budgetTotal = Object.values(expenses).reduce((s, v) => s + v, 0);
+    const actualTotal = actualMonthlyByCategory ? Object.values(actualMonthlyByCategory).reduce((s, v) => s + v, 0) : null;
+
+    return (
     <div style={S.sectionGap}>
+      {/* Budget vs Actual summary card */}
+      {hasActuals && (
+        <div style={{ ...S.card, borderLeft: `3px solid ${COLORS.accent}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={S.cardTitle}>Budget vs Actual</div>
+              <p style={{ ...S.cardSub, margin: 0 }}>Comparing your budget sliders to imported spending averages</p>
+            </div>
+            <button
+              onClick={handleSetToActuals}
+              style={{
+                padding: '8px 16px',
+                border: `1px solid ${COLORS.teal}`,
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 12,
+                background: `${COLORS.teal}10`,
+                color: COLORS.teal,
+              }}
+            >
+              📊 Set Sliders to Actuals
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 24, marginTop: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Budget</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.blue }}>{formatCurrency(budgetTotal)}/mo</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actual Avg</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.orange }}>{formatCurrency(actualTotal ?? 0)}/mo</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Delta</div>
+              {(() => {
+                const delta = budgetTotal - (actualTotal ?? 0);
+                const isUnder = delta >= 0;
+                return (
+                  <div style={{ fontSize: 20, fontWeight: 700, color: isUnder ? COLORS.green : COLORS.red }}>
+                    {isUnder ? '−' : '+'}{formatCurrency(Math.abs(delta))}/mo
+                    <span style={{ fontSize: 12, fontWeight: 500, marginLeft: 6 }}>
+                      ({isUnder ? 'under' : 'over'} budget)
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Preset selector */}
       <div style={S.card}>
         <div style={S.cardTitle}>Spending Preset</div>
@@ -317,6 +450,8 @@ export default function ExpensesPanel() {
               {cats.map((cat) => {
                 const val = expenses[cat.id] ?? 0;
                 const pct = cat.max > cat.min ? ((val - cat.min) / (cat.max - cat.min)) * 100 : 0;
+                const actual = actualMonthlyByCategory?.[cat.id];
+                const delta = actual !== undefined ? val - actual : null;
                 return (
                   <div key={cat.id}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -324,6 +459,16 @@ export default function ExpensesPanel() {
                         {cat.icon} {cat.label}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {actual !== undefined && (
+                          <span style={{ fontSize: 11, color: COLORS.textMuted, marginRight: 8 }}>
+                            actual: {formatCurrency(Math.round(actual))}
+                            {delta !== null && (
+                              <span style={{ color: delta >= 0 ? COLORS.green : COLORS.red, marginLeft: 4, fontWeight: 600 }}>
+                                ({delta >= 0 ? '−' : '+'}{formatCurrency(Math.abs(Math.round(delta)))})
+                              </span>
+                            )}
+                          </span>
+                        )}
                         <span style={{ fontSize: 13, color: COLORS.textMuted }}>$</span>
                         <input
                           type="number"
@@ -404,7 +549,8 @@ export default function ExpensesPanel() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   // ── Render: Breakdown Tab ───────────────────────────────────────
   const renderBreakdown = () => (
@@ -1059,9 +1205,58 @@ export default function ExpensesPanel() {
       <h1 style={{ fontSize: 24, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 4, letterSpacing: '-0.02em' }}>
         Expense Budget
       </h1>
-      <p style={{ fontSize: 14, color: COLORS.textSecondary, margin: '0 0 28px 0' }}>
+      <p style={{ fontSize: 14, color: COLORS.textSecondary, margin: '0 0 12px 0' }}>
         Track spending, maximize savings, accelerate FIRE
       </p>
+
+      {/* Data source toggle */}
+      {hasActuals && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 20,
+          padding: '10px 16px',
+          borderRadius: 10,
+          background: useActuals ? `${COLORS.teal}08` : `${COLORS.accent}08`,
+          border: `1px solid ${useActuals ? COLORS.teal : COLORS.accent}20`,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Data source:</span>
+          <button
+            onClick={() => setUseActuals(false)}
+            style={{
+              padding: '5px 12px',
+              border: !useActuals ? `2px solid ${COLORS.accent}` : `1px solid ${COLORS.border}`,
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: 12,
+              background: !useActuals ? `${COLORS.accent}15` : 'transparent',
+              color: !useActuals ? COLORS.accent : COLORS.textMuted,
+            }}
+          >
+            📝 Budget Estimates
+          </button>
+          <button
+            onClick={() => setUseActuals(true)}
+            style={{
+              padding: '5px 12px',
+              border: useActuals ? `2px solid ${COLORS.teal}` : `1px solid ${COLORS.border}`,
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: 12,
+              background: useActuals ? `${COLORS.teal}15` : 'transparent',
+              color: useActuals ? COLORS.teal : COLORS.textMuted,
+            }}
+          >
+            📊 Imported Actuals
+          </button>
+          <span style={{ fontSize: 11, color: COLORS.textMuted, marginLeft: 'auto' }}>
+            {useActuals ? 'Savings/FIRE use actual spending' : 'Savings/FIRE use slider values'}
+          </span>
+        </div>
+      )}
 
       {/* Pill tabs */}
       <div style={pillContainer}>
@@ -1072,6 +1267,17 @@ export default function ExpensesPanel() {
             style={pillBtn(activeTab === tab.id)}
           >
             {tab.label}
+            {hasActuals && (tab.id === 'savings' || tab.id === 'fire') && (
+              <span style={{
+                display: 'inline-block',
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: useActuals ? COLORS.teal : COLORS.accent,
+                marginLeft: 5,
+                verticalAlign: 'middle',
+              }} />
+            )}
           </button>
         ))}
       </div>
@@ -1081,7 +1287,13 @@ export default function ExpensesPanel() {
       {activeTab === 'breakdown' && renderBreakdown()}
       {activeTab === 'savings' && renderSavings()}
       {activeTab === 'fire' && renderFIRE()}
-      {activeTab === 'import' && <ExpenseImportPanel />}
+      {activeTab === 'spending' && (
+        <ExpenseImportPanel
+          transactions={importedTransactions}
+          meta={importedMeta}
+          onDataChange={handleImportDataChange}
+        />
+      )}
     </div>
   );
 }

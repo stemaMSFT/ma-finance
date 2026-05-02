@@ -31,3 +31,4 @@ src/data/
 *.njsproj
 *.sln
 *.sw?
+tmp-import.json

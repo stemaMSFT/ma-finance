@@ -1,18 +1,18 @@
 /**
  * ExpenseImportPanel — Upload Rocket Money CSV, preview, and import.
- * Shows import status, monthly breakdown, and category mapping.
+ * Shows import status, spending trends, and category mapping.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatCurrency } from '../../utils/format';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
+  ResponsiveContainer, Cell, LineChart, Line, Legend,
 } from 'recharts';
 
 // ── Types ─────────────────────────────────────────────────────────
 
-interface Transaction {
+export interface Transaction {
   date: string;
   description: string;
   rawCategory: string;
@@ -23,7 +23,7 @@ interface Transaction {
   transactionType: 'expense' | 'income' | 'refund' | 'transfer';
 }
 
-interface ImportMeta {
+export interface ImportMeta {
   importedAt: string;
   filename: string;
   rowCount: number;
@@ -42,6 +42,12 @@ interface ImportSummary {
   totalRefundAmount: number;
   categoryTotals: Record<string, number>;
   errors: string[];
+}
+
+export interface ExpenseImportPanelProps {
+  transactions?: Transaction[];
+  meta?: ImportMeta | null;
+  onDataChange?: (data: { imported: boolean; meta: ImportMeta | null; transactions: Transaction[] }) => void;
 }
 
 // ── Colors ────────────────────────────────────────────────────────
@@ -166,32 +172,45 @@ const S = {
 
 // ── Component ─────────────────────────────────────────────────────
 
-export default function ExpenseImportPanel() {
+export default function ExpenseImportPanel({ transactions: propTransactions, meta: propMeta, onDataChange }: ExpenseImportPanelProps) {
   const [imported, setImported] = useState(false);
-  const [meta, setMeta] = useState<ImportMeta | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [meta, setMeta] = useState<ImportMeta | null>(propMeta ?? null);
+  const [transactions, setTransactions] = useState<Transaction[]>(propTransactions ?? []);
+  const [loading, setLoading] = useState(!propTransactions);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [importCollapsed, setImportCollapsed] = useState(true);
 
   // Preview state
   const [preview, setPreview] = useState<Transaction[] | null>(null);
   const [previewSummary, setPreviewSummary] = useState<ImportSummary | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
 
-  // Load existing data
+  // Sync from props
   useEffect(() => {
+    if (propTransactions) {
+      setTransactions(propTransactions);
+      setImported(propTransactions.length > 0);
+      setLoading(false);
+    }
+    if (propMeta) setMeta(propMeta);
+  }, [propTransactions, propMeta]);
+
+  // Load existing data only if not provided via props
+  useEffect(() => {
+    if (propTransactions) return;
     fetch('/api/expenses', { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         setImported(data.imported);
         setMeta(data.meta);
         setTransactions(data.transactions);
+        onDataChange?.({ imported: data.imported, meta: data.meta, transactions: data.transactions });
       })
       .catch(() => setError('Failed to load expense data'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [propTransactions, onDataChange]);
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
@@ -254,11 +273,12 @@ export default function ExpenseImportPanel() {
       setPreview(null);
       setPreviewSummary(null);
       setPreviewFile(null);
+      onDataChange?.({ imported: loadData.imported, meta: loadData.meta, transactions: loadData.transactions });
     } catch {
       setError('Import failed');
     }
     setUploading(false);
-  }, [previewFile]);
+  }, [previewFile, onDataChange]);
 
   const clearData = useCallback(async () => {
     if (!confirm('This will delete all imported expense data. Continue?')) return;
@@ -266,7 +286,8 @@ export default function ExpenseImportPanel() {
     setImported(false);
     setMeta(null);
     setTransactions([]);
-  }, []);
+    onDataChange?.({ imported: false, meta: null, transactions: [] });
+  }, [onDataChange]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -404,122 +425,214 @@ export default function ExpenseImportPanel() {
     );
   }
 
-  // ── Imported Data View ──────────────────────────────────────────
+  // ── Imported Data View → Spending Trends ─────────────────────────
 
-  if (imported && transactions.length > 0) {
-    const expenses = transactions.filter(t => t.transactionType === 'expense');
-    const refunds = transactions.filter(t => t.transactionType === 'refund');
+  // Compute spending analytics
+  const analytics = useMemo(() => {
+    if (!imported || transactions.length === 0) return null;
+    const expenseTxns = transactions.filter(t => t.transactionType === 'expense');
+    const refundTxns = transactions.filter(t => t.transactionType === 'refund');
 
     // Monthly totals
     const monthlyMap = new Map<string, number>();
-    for (const t of expenses) {
-      const month = t.date.slice(0, 7); // YYYY-MM
+    for (const t of expenseTxns) {
+      const month = t.date.slice(0, 7);
       monthlyMap.set(month, (monthlyMap.get(month) ?? 0) + t.amount);
     }
-    for (const t of refunds) {
+    for (const t of refundTxns) {
       const month = t.date.slice(0, 7);
       monthlyMap.set(month, (monthlyMap.get(month) ?? 0) - t.amount);
     }
     const monthlyData = [...monthlyMap.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, total]) => ({
-        month: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        month,
+        label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         total: Math.max(0, total),
       }));
 
-    // Category totals (expenses only)
-    const catMap = new Map<string, number>();
-    for (const t of expenses) {
-      catMap.set(t.mappedCategory, (catMap.get(t.mappedCategory) ?? 0) + t.amount);
+    // Category totals & monthly averages
+    const catExpenseMap = new Map<string, number>();
+    const catRefundMap = new Map<string, number>();
+    for (const t of expenseTxns) {
+      if (t.mappedCategory === '__transfer') continue;
+      catExpenseMap.set(t.mappedCategory, (catExpenseMap.get(t.mappedCategory) ?? 0) + t.amount);
     }
-    const catData = [...catMap.entries()]
-      .filter(([cat]) => cat !== '__transfer')
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
-      .map(([category, total]) => ({ category, total }));
-
-    const totalSpend = expenses.reduce((s, t) => s + t.amount, 0);
-    const totalRefunds = refunds.reduce((s, t) => s + t.amount, 0);
-    const netSpend = totalSpend - totalRefunds;
+    for (const t of refundTxns) {
+      if (t.mappedCategory === '__transfer') continue;
+      catRefundMap.set(t.mappedCategory, (catRefundMap.get(t.mappedCategory) ?? 0) + t.amount);
+    }
     const monthCount = monthlyMap.size || 1;
+    const catData = [...catExpenseMap.entries()]
+      .map(([category, total]) => ({
+        category,
+        total: total - (catRefundMap.get(category) ?? 0),
+        monthlyAvg: (total - (catRefundMap.get(category) ?? 0)) / monthCount,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    // Summary stats
+    const totalSpend = expenseTxns.reduce((s, t) => s + t.amount, 0);
+    const totalRefunds = refundTxns.reduce((s, t) => s + t.amount, 0);
+    const netSpend = totalSpend - totalRefunds;
     const avgMonthly = netSpend / monthCount;
 
+    // Month-over-month change for most recent month
+    let momChange: { current: number; previous: number; delta: number; pct: number } | null = null;
+    if (monthlyData.length >= 2) {
+      const current = monthlyData[monthlyData.length - 1].total;
+      const previous = monthlyData[monthlyData.length - 2].total;
+      momChange = { current, previous, delta: current - previous, pct: previous > 0 ? ((current - previous) / previous) * 100 : 0 };
+    }
+
+    // Year-over-year comparison
+    const yearMap = new Map<string, number>();
+    for (const [month, total] of monthlyMap) {
+      const year = month.slice(0, 4);
+      yearMap.set(year, (yearMap.get(year) ?? 0) + total);
+    }
+    const yearMonths = new Map<string, number>();
+    for (const [month] of monthlyMap) {
+      const year = month.slice(0, 4);
+      yearMonths.set(year, (yearMonths.get(year) ?? 0) + 1);
+    }
+    const yoyData = [...yearMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([year, total]) => ({
+        year,
+        total,
+        months: yearMonths.get(year) ?? 1,
+        monthlyAvg: total / (yearMonths.get(year) ?? 1),
+      }));
+
+    return { monthlyData, catData, totalSpend, totalRefunds, netSpend, avgMonthly, monthCount, momChange, yoyData };
+  }, [imported, transactions]);
+
+  if (imported && transactions.length > 0 && analytics) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* Summary */}
+        {/* Collapsible import/re-import UI */}
         <div style={S.card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={S.title}>📊 Expense History</h3>
+              <h3 style={S.title}>📊 Spending Trends</h3>
               <p style={S.subtitle}>
-                Imported from {meta?.filename} • {meta?.dateRange.start} → {meta?.dateRange.end}
+                {meta?.filename} • {meta?.dateRange.start} → {meta?.dateRange.end} • {analytics.monthCount} months
               </p>
             </div>
-            <button style={S.btn('ghost')} onClick={() => { setImported(false); }}>
-              Re-import
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={S.btn('ghost')} onClick={() => setImportCollapsed(!importCollapsed)}>
+                {importCollapsed ? '📤 Re-import' : '✕ Close'}
+              </button>
+            </div>
           </div>
+          {!importCollapsed && (
+            <div style={{ marginTop: 16, padding: 16, borderRadius: 10, background: COLORS.dropBg }}>
+              <div
+                style={S.dropZone(isDragging)}
+                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={onDrop}
+                onClick={() => document.getElementById('csv-file-input')?.click()}
+              >
+                <p style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary, margin: 0 }}>
+                  {uploading ? 'Processing...' : 'Drop CSV to re-import'}
+                </p>
+              </div>
+              <input id="csv-file-input" type="file" accept=".csv" style={{ display: 'none' }} onChange={onFileSelect} />
+              <button style={{ ...S.btn('danger'), marginTop: 12 }} onClick={clearData}>🗑️ Clear Data</button>
+            </div>
+          )}
+        </div>
 
+        {/* Summary stats */}
+        <div style={S.card}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <div style={S.stat}>
-              <span style={S.statValue}>{formatCurrency(netSpend, true)}</span>
+              <span style={S.statValue}>{formatCurrency(analytics.netSpend, true)}</span>
               <span style={S.statLabel}>Net Spending</span>
             </div>
             <div style={S.stat}>
-              <span style={S.statValue}>{formatCurrency(avgMonthly, true)}</span>
+              <span style={S.statValue}>{formatCurrency(analytics.avgMonthly, true)}</span>
               <span style={S.statLabel}>Avg/Month</span>
             </div>
             <div style={S.stat}>
-              <span style={S.statValue}>{expenses.length}</span>
+              <span style={S.statValue}>{transactions.filter(t => t.transactionType === 'expense').length}</span>
               <span style={S.statLabel}>Transactions</span>
             </div>
-            <div style={S.stat}>
-              <span style={S.statValue}>{monthCount}</span>
-              <span style={S.statLabel}>Months</span>
-            </div>
+            {analytics.momChange && (
+              <div style={S.stat}>
+                <span style={{ ...S.statValue, color: analytics.momChange.delta > 0 ? COLORS.red : COLORS.green }}>
+                  {analytics.momChange.delta > 0 ? '+' : ''}{formatCurrency(analytics.momChange.delta, true)}
+                </span>
+                <span style={S.statLabel}>vs Last Month ({analytics.momChange.pct > 0 ? '+' : ''}{analytics.momChange.pct.toFixed(0)}%)</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Monthly chart */}
+        {/* Monthly spending trend line */}
         <div style={S.card}>
-          <h3 style={S.title}>Monthly Spending</h3>
-          <p style={S.subtitle}>Net expenses by month (after refunds)</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={monthlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <h3 style={S.title}>Monthly Spending Trend</h3>
+          <p style={S.subtitle}>Total spending over time with trend</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={analytics.monthlyData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
-              <Bar dataKey="total" fill={COLORS.accent} radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.max(0, Math.floor(analytics.monthlyData.length / 12))} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={(l: string) => l} />
+              <Line type="monotone" dataKey="total" stroke={COLORS.accent} strokeWidth={2} dot={false} />
+              {/* Average line */}
+              <Line type="monotone" dataKey={() => analytics.avgMonthly} stroke={COLORS.orange} strokeWidth={1.5} strokeDasharray="5 5" dot={false} name="Average" />
+            </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Category breakdown */}
+        {/* Top spending categories */}
         <div style={S.card}>
-          <h3 style={S.title}>Top Categories</h3>
-          <p style={S.subtitle}>Spending by mapped category</p>
-          <ResponsiveContainer width="100%" height={Math.max(200, catData.length * 36)}>
-            <BarChart data={catData} layout="vertical" margin={{ top: 0, right: 8, left: 80, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
-              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-              <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
-              <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                {catData.map((entry, i) => (
-                  <Cell key={i} fill={CATEGORY_COLORS[entry.category] ?? COLORS.textMuted} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 style={S.title}>Top Spending Categories</h3>
+          <p style={S.subtitle}>Ranked by total spending, with monthly average</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {analytics.catData.map((cat, i) => {
+              const maxTotal = analytics.catData[0]?.total ?? 1;
+              const pct = (cat.total / maxTotal) * 100;
+              return (
+                <div key={cat.category}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>
+                      #{i + 1} {cat.category}
+                    </span>
+                    <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                      {formatCurrency(cat.monthlyAvg)}/mo • {formatCurrency(cat.total, true)} total
+                    </span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 4, background: COLORS.border, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: CATEGORY_COLORS[cat.category] ?? COLORS.textMuted, transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Clear data */}
-        <div style={{ textAlign: 'right' }}>
-          <button style={S.btn('danger')} onClick={clearData}>
-            🗑️ Clear Imported Data
-          </button>
-        </div>
+        {/* Year-over-year comparison */}
+        {analytics.yoyData.length > 1 && (
+          <div style={S.card}>
+            <h3 style={S.title}>Year-over-Year Comparison</h3>
+            <p style={S.subtitle}>Average monthly spending by year</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={analytics.yoyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+                <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Legend />
+                <Bar dataKey="monthlyAvg" name="Avg Monthly" fill={COLORS.accent} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     );
   }
