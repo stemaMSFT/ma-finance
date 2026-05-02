@@ -84,7 +84,6 @@ const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   // Housing: mortgage, rent, HOA, property tax
   [/mortgage/i, 'housing'],
   [/\bpennymac\b/i, 'housing'],
-  [/\brent\b/i, 'housing'],
   [/\bhoa\b/i, 'housing'],
   [/property.?tax/i, 'housing'],
 
@@ -95,10 +94,11 @@ const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   [/\ballstate\b/i, 'insurance'],
   [/\busaa\b/i, 'insurance'],
 
-  // Auto loans
+  // Auto
   [/wells\s*fargo\s*auto/i, 'transportation'],
+  [/stage\s*auto\s*rebuild/i, 'transportation'],
 
-  // Subscriptions: streaming, software
+  // Subscriptions: streaming, software, memberships
   [/\bspotify\b/i, 'subscriptions'],
   [/\bnetflix\b/i, 'subscriptions'],
   [/\bhulu\b/i, 'subscriptions'],
@@ -108,8 +108,26 @@ const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   [/\badobe\b/i, 'subscriptions'],
   [/\bicloud\b/i, 'subscriptions'],
   [/\bchatgpt\b|openai/i, 'subscriptions'],
+  [/renewal\s*membership\s*fee/i, 'subscriptions'],
+  [/annual\s*(membership\s*)?fee/i, 'subscriptions'],
+  [/\bcostco\b.*fee/i, 'subscriptions'],
 
-  // Venmo/Zelle: treat as real expense (misc) when Rocket Money tags as transfer
+  // Utilities
+  [/city\s*of\s*kirkland/i, 'utilities'],
+
+  // Wedding expenses — excluded from ongoing spending analysis
+  [/wedding\s*5\/24/i, '__wedding'],
+  [/steven\s*&?\s*sonya.*wedding/i, '__wedding'],
+  [/\bdj\s*kemyst\b/i, '__wedding'],
+  [/sul\s*gi\s*suh.*sonya\s*lao/i, '__wedding'],
+
+  // Specific Zelle/Venmo with known purposes (MUST be before generic __venmo rules)
+  [/zelle.*yan\s*wang.*cell\s*phone/i, 'utilities'],
+  [/zelle.*steven\s*ma\s*conf#/i, '__transfer'],
+  [/zelle.*yanan\s*ma/i, '__transfer'],
+  [/zelle.*missions\s*giving/i, 'gifts'],
+
+  // Venmo/Zelle/CashApp: generic fallback — treat as real expense
   [/\bvenmo\b/i, '__venmo'],
   [/\bzelle\b/i, '__venmo'],
   [/\bcashapp\b|cash\s*app/i, '__venmo'],
@@ -127,6 +145,8 @@ function mapCategory(raw: string, description?: string): string {
   if (description) {
     const override = descriptionOverride(description);
     if (override === '__venmo') return 'misc'; // Venmo/Zelle → misc (can't determine true category)
+    if (override === '__wedding') return '__wedding';
+    if (override === '__transfer') return '__transfer';
     if (override) return override;
   }
 
@@ -150,6 +170,8 @@ function classifyTransaction(amount: number, rawCategory: string, description?: 
       if (amount < 0) return 'refund';
       return 'expense';
     }
+    if (override === '__transfer') return 'transfer';
+    if (override === '__wedding') return 'transfer'; // Excluded from spending — one-time event
     // If description override points to a real category, treat as expense even if
     // Rocket Money category would make it a transfer (e.g., mortgage as "Loan Payment")
     if (override && override !== '__transfer' && override !== '__income') {
