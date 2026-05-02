@@ -75,9 +75,59 @@ const CATEGORY_MAP: Record<string, string> = {
   'business': '__transfer',
 };
 
-function mapCategory(raw: string): string {
+// ── Description-Based Overrides ───────────────────────────────────
+// Matches against transaction Name/Description to fix miscategorized items.
+// Checked BEFORE the Rocket Money category — description is more reliable.
+// Each rule: [pattern (regex or string), overrideCategory]
+
+const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
+  // Housing: mortgage, rent, HOA, property tax
+  [/mortgage/i, 'housing'],
+  [/\brent\b/i, 'housing'],
+  [/\bhoa\b/i, 'housing'],
+  [/property.?tax/i, 'housing'],
+
+  // Insurance: carriers
+  [/\bgeico\b/i, 'insurance'],
+  [/\bprogressive\b/i, 'insurance'],
+  [/\bstate\s*farm\b/i, 'insurance'],
+  [/\ballstate\b/i, 'insurance'],
+  [/\busaa\b/i, 'insurance'],
+
+  // Subscriptions: streaming, software
+  [/\bspotify\b/i, 'subscriptions'],
+  [/\bnetflix\b/i, 'subscriptions'],
+  [/\bhulu\b/i, 'subscriptions'],
+  [/\bdisney\+?\b/i, 'subscriptions'],
+  [/\byoutube\s*(premium|music)/i, 'subscriptions'],
+  [/\bapple\s*(music|tv|one|arcade)/i, 'subscriptions'],
+  [/\badobe\b/i, 'subscriptions'],
+  [/\bicloud\b/i, 'subscriptions'],
+  [/\bchatgpt\b|openai/i, 'subscriptions'],
+
+  // Venmo/Zelle: treat as real expense (misc) when Rocket Money tags as transfer
+  [/\bvenmo\b/i, '__venmo'],
+  [/\bzelle\b/i, '__venmo'],
+  [/\bcashapp\b|cash\s*app/i, '__venmo'],
+];
+
+function descriptionOverride(description: string): string | null {
+  for (const [pattern, category] of DESCRIPTION_OVERRIDES) {
+    if (pattern.test(description)) return category;
+  }
+  return null;
+}
+
+function mapCategory(raw: string, description?: string): string {
+  // Check description overrides first — more reliable than Rocket Money categories
+  if (description) {
+    const override = descriptionOverride(description);
+    if (override === '__venmo') return 'misc'; // Venmo/Zelle → misc (can't determine true category)
+    if (override) return override;
+  }
+
   const normalized = raw.trim().toLowerCase();
-  // Direct match first
+  // Direct match
   if (CATEGORY_MAP[normalized]) return CATEGORY_MAP[normalized];
   // Partial match fallback
   for (const [key, mapped] of Object.entries(CATEGORY_MAP)) {
@@ -86,8 +136,25 @@ function mapCategory(raw: string): string {
   return 'misc';
 }
 
-function classifyTransaction(amount: number, rawCategory: string): TransactionType {
-  const mapped = mapCategory(rawCategory);
+function classifyTransaction(amount: number, rawCategory: string, description?: string): TransactionType {
+  // Check if description override rescues a transfer (e.g., Venmo tagged as Internal Transfer)
+  if (description) {
+    const override = descriptionOverride(description);
+    if (override === '__venmo') {
+      // Venmo/Zelle: positive = you paid someone (expense), negative = someone paid you back (refund)
+      // Both land in 'misc' since we don't know the true category — refunds offset spending
+      if (amount < 0) return 'refund';
+      return 'expense';
+    }
+    // If description override points to a real category, treat as expense even if
+    // Rocket Money category would make it a transfer (e.g., mortgage as "Loan Payment")
+    if (override && override !== '__transfer' && override !== '__income') {
+      if (amount < 0) return 'refund';
+      return 'expense';
+    }
+  }
+
+  const mapped = mapCategory(rawCategory, description);
 
   // Transfers and internal moves
   if (mapped === '__transfer') return 'transfer';
@@ -95,13 +162,7 @@ function classifyTransaction(amount: number, rawCategory: string): TransactionTy
   if (mapped === '__income') return 'income';
 
   // Rocket Money: positive = expense, negative = credit/refund/income
-  if (amount < 0) {
-    const norm = rawCategory.trim().toLowerCase();
-    if (norm.includes('refund') || norm.includes('return') || norm.includes('reimbursement')) {
-      return 'refund';
-    }
-    return 'refund'; // negative amounts on expense categories are credits/refunds
-  }
+  if (amount < 0) return 'refund';
   return 'expense';
 }
 
@@ -167,8 +228,8 @@ function parseCSV(buffer: Buffer, _filename: string): ParseResult {
     }
 
     const isoDate = parsedDate.toISOString().split('T')[0];
-    const transactionType = classifyTransaction(amount, category);
-    const mappedCategory = mapCategory(category);
+    const transactionType = classifyTransaction(amount, category, desc);
+    const mappedCategory = mapCategory(category, desc);
 
     transactions.push({
       date: isoDate,
