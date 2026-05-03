@@ -39,7 +39,7 @@ const COLORS = {
 
 const S = { ...SHARED_S };
 
-interfaceCompHistoryEntry {
+interface CompHistoryEntry {
   fy: string;
   baseMidpoint: number;
   bonus: number;
