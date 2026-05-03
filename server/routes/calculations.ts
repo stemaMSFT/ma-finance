@@ -21,6 +21,10 @@ const router = Router();
  */
 router.post('/retirement', (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
     const { profile, retirement } = req.body as {
       profile: UserProfile;
       retirement: RetirementInput;
@@ -41,6 +45,10 @@ router.post('/retirement', (req, res, next) => {
  */
 router.post('/housing', (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
     const { profile, housing } = req.body as {
       profile: UserProfile;
       housing: HousingInput;
@@ -61,6 +69,10 @@ router.post('/housing', (req, res, next) => {
  */
 router.post('/renovation', (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
     const { renovation } = req.body as { renovation: RenovationInput };
     if (!renovation) {
       throw createHttpError(400, '"renovation" field is required');
@@ -78,6 +90,10 @@ router.post('/renovation', (req, res, next) => {
  */
 router.post('/net-worth', (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
     const input = req.body as NetWorthInput;
     if (input.currentAge == null || input.years == null) {
       throw createHttpError(400, '"currentAge" and "years" are required');

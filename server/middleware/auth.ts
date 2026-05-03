@@ -1,10 +1,15 @@
-/**
- * Auth middleware — protects API routes by requiring a valid session.
- */
-
 import type { Request, Response, NextFunction } from 'express';
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
-  // Auth temporarily bypassed for local dev
-  next();
+/**
+ * Auth middleware — enforces session authentication.
+ * Set AUTH_BYPASS=true in .env for local development without login.
+ */
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  if (process.env.AUTH_BYPASS === 'true') {
+    return next();
+  }
+  if (req.session?.authenticated) {
+    return next();
+  }
+  res.status(401).json({ error: 'Authentication required' });
 }

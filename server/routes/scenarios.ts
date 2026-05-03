@@ -38,6 +38,10 @@ router.get('/:id', async (req, res, next) => {
 /** POST /api/scenarios — create a new scenario */
 router.post('/', async (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
     const { name, type, inputs, results } = req.body as Partial<SavedScenario>;
     if (!name || typeof name !== 'string') throw createHttpError(400, 'name is required');
     if (!type || !VALID_TYPES.has(type)) throw createHttpError(400, `type must be one of: ${[...VALID_TYPES].join(', ')}`);
@@ -64,6 +68,10 @@ router.post('/', async (req, res, next) => {
 /** PUT /api/scenarios/:id — update an existing scenario */
 router.put('/:id', async (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
     const scenarios = await loadScenarios();
     const existing = scenarios.find((s) => s.id === req.params.id);
     if (!existing) throw createHttpError(404, `Scenario ${req.params.id} not found`);

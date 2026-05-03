@@ -285,86 +285,101 @@ function parseCSV(buffer: Buffer, _filename: string): ParseResult {
 
 /** POST /api/expenses/import?dryRun=true|false — parse and optionally save */
 router.post('/import', upload.single('file'), async (req, res) => {
-  if (!req.file) {
-    res.status(400).json({ error: 'No CSV file provided' });
-    return;
-  }
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No CSV file provided' });
+      return;
+    }
 
-  const dryRun = req.query.dryRun === 'true';
-  const { transactions, errors, skipped } = parseCSV(req.file.buffer, req.file.originalname);
+    const dryRun = req.query.dryRun === 'true';
+    const { transactions, errors, skipped } = parseCSV(req.file.buffer, req.file.originalname);
 
-  if (transactions.length === 0) {
-    res.status(400).json({
-      error: 'No valid transactions found in CSV',
-      errors: errors.slice(0, 10),
-    });
-    return;
-  }
+    if (transactions.length === 0) {
+      res.status(400).json({
+        error: 'No valid transactions found in CSV',
+        errors: errors.slice(0, 10),
+      });
+      return;
+    }
 
-  // Compute summary
-  const dates = transactions.map(t => t.date).sort();
-  const dateRange = { start: dates[0], end: dates[dates.length - 1] };
-  const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex').slice(0, 16);
+    // Compute summary
+    const dates = transactions.map(t => t.date).sort();
+    const dateRange = { start: dates[0], end: dates[dates.length - 1] };
+    const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex').slice(0, 16);
 
-  const expenses = transactions.filter(t => t.transactionType === 'expense');
-  const refunds = transactions.filter(t => t.transactionType === 'refund');
-  const transfers = transactions.filter(t => t.transactionType === 'transfer');
+    const expenses = transactions.filter(t => t.transactionType === 'expense');
+    const refunds = transactions.filter(t => t.transactionType === 'refund');
+    const transfers = transactions.filter(t => t.transactionType === 'transfer');
 
-  // Category breakdown (expenses only)
-  const categoryTotals: Record<string, number> = {};
-  for (const t of expenses) {
-    categoryTotals[t.mappedCategory] = (categoryTotals[t.mappedCategory] ?? 0) + t.amount;
-  }
+    // Category breakdown (expenses only)
+    const categoryTotals: Record<string, number> = {};
+    for (const t of expenses) {
+      categoryTotals[t.mappedCategory] = (categoryTotals[t.mappedCategory] ?? 0) + t.amount;
+    }
 
-  const summary = {
-    totalRows: transactions.length,
-    expenses: expenses.length,
-    refunds: refunds.length,
-    transfers: transfers.length,
-    income: transactions.filter(t => t.transactionType === 'income').length,
-    skipped,
-    dateRange,
-    totalExpenseAmount: expenses.reduce((sum, t) => sum + t.amount, 0),
-    totalRefundAmount: refunds.reduce((sum, t) => sum + t.amount, 0),
-    categoryTotals,
-    errors: errors.slice(0, 10),
-  };
-
-  if (dryRun) {
-    res.json({ dryRun: true, summary, preview: transactions.slice(0, 20) });
-    return;
-  }
-
-  // Save
-  const data: ExpenseData = {
-    meta: {
-      importedAt: new Date().toISOString(),
-      filename: req.file.originalname,
-      rowCount: transactions.length,
+    const summary = {
+      totalRows: transactions.length,
+      expenses: expenses.length,
+      refunds: refunds.length,
+      transfers: transfers.length,
+      income: transactions.filter(t => t.transactionType === 'income').length,
+      skipped,
       dateRange,
-      fileHash,
-    },
-    transactions,
-  };
+      totalExpenseAmount: expenses.reduce((sum, t) => sum + t.amount, 0),
+      totalRefundAmount: refunds.reduce((sum, t) => sum + t.amount, 0),
+      categoryTotals,
+      errors: errors.slice(0, 10),
+    };
 
-  await saveExpenses(data);
-  res.json({ dryRun: false, summary });
+    if (dryRun) {
+      res.json({ dryRun: true, summary, preview: transactions.slice(0, 20) });
+      return;
+    }
+
+    // Save
+    const data: ExpenseData = {
+      meta: {
+        importedAt: new Date().toISOString(),
+        filename: req.file.originalname,
+        rowCount: transactions.length,
+        dateRange,
+        fileHash,
+      },
+      transactions,
+    };
+
+    await saveExpenses(data);
+    res.json({ dryRun: false, summary });
+  } catch (err) {
+    console.error('Error in POST /expenses/import:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 /** GET /api/expenses — retrieve stored transactions */
 router.get('/', async (_req, res) => {
-  const data = await loadExpenses();
-  if (!data) {
-    res.json({ imported: false, meta: null, transactions: [] });
-    return;
+  try {
+    const data = await loadExpenses();
+    if (!data) {
+      res.json({ imported: false, meta: null, transactions: [] });
+      return;
+    }
+    res.json({ imported: true, meta: data.meta, transactions: data.transactions });
+  } catch (err) {
+    console.error('Error in GET /expenses:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  res.json({ imported: true, meta: data.meta, transactions: data.transactions });
 });
 
 /** DELETE /api/expenses — clear all stored expense data */
 router.delete('/', async (_req, res) => {
-  await clearExpenses();
-  res.json({ ok: true });
+  try {
+    await clearExpenses();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error in DELETE /expenses:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

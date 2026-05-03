@@ -21,6 +21,15 @@ const app = express();
 const PORT = process.env.PORT ?? 3001;
 const isProd = process.env.NODE_ENV === 'production';
 
+// ── Session secret ────────────────────────────────────────────────
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET && isProd) {
+  throw new Error('SESSION_SECRET environment variable is required in production');
+}
+if (!SESSION_SECRET) {
+  console.warn('[ma-finance] WARNING: SESSION_SECRET not set — using insecure default. Set it in .env for production.');
+}
+
 // ── Trust proxy (needed for secure cookies behind Render/etc.) ────
 if (isProd) app.set('trust proxy', 1);
 
@@ -32,7 +41,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieSession({
   name: 'ma-finance-session',
-  secret: process.env.SESSION_SECRET ?? 'dev-secret-change-me',
+  secret: SESSION_SECRET ?? 'dev-secret-change-me',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   httpOnly: true,
   secure: isProd,
