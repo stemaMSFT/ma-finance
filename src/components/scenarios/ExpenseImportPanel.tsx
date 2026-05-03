@@ -82,7 +82,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   entertainment: '#06b6d4',
   personalCare: '#84cc16',
   debt: '#dc2626',
-  gifts: '#eab308',
+  giving: '#eab308',
   childcare: '#10b981',
   misc: '#94a3b8',
   __transfer: '#64748b',
