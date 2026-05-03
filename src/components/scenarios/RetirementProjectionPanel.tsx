@@ -327,6 +327,29 @@ export default function RetirementProjectionPanel() {
   const [settings, setSettings] = useState<ProjectionSettings>(DEFAULT_SETTINGS);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
+  // Actual expense data
+  const [actualAnnualExpenses, setActualAnnualExpenses] = useState<number | null>(null);
+  const [actualMonthCount, setActualMonthCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/expenses')
+      .then((r) => r.json())
+      .then((data: { imported: boolean; transactions: { date: string; amount: number; transactionType: string; mappedCategory: string }[] }) => {
+        if (!data.imported || !data.transactions?.length) return;
+        const filtered = data.transactions.filter(
+          (t) => t.transactionType === 'expense' && t.date >= '2025-05'
+        );
+        if (filtered.length === 0) return;
+        const months = new Set(filtered.map((t) => t.date.slice(0, 7)));
+        const monthCount = Math.max(months.size, 1);
+        const totalExpenses = filtered.reduce((s, t) => s + t.amount, 0);
+        const annualExp = (totalExpenses / monthCount) * 12;
+        setActualAnnualExpenses(Math.round(annualExp));
+        setActualMonthCount(monthCount);
+      })
+      .catch(() => {});
+  }, []);
+
   const updateSetting = <K extends keyof ProjectionSettings>(key: K, value: ProjectionSettings[K]) =>
     setSettings(prev => ({ ...prev, [key]: value }));
 
@@ -433,6 +456,23 @@ export default function RetirementProjectionPanel() {
 
   const yearsUntilRetirement = settings.retirementAge - 27;
 
+  const spendingReadiness = useMemo(() => {
+    if (actualAnnualExpenses === null) return null;
+    const yearsToRetirement = settings.retirementAge - 27;
+    const inflationRate = 0.03;
+    const spendingAtRetirement = actualAnnualExpenses * Math.pow(1 + inflationRate, yearsToRetirement);
+    const portfolioNeeded = spendingAtRetirement / (settings.safeWithdrawalRate / 100);
+    const projectedPortfolio = readiness.projectedPortfolio;
+    const funded = portfolioNeeded > 0 ? Math.min(100, Math.round((projectedPortfolio / portfolioNeeded) * 100)) : 100;
+    return {
+      currentAnnual: actualAnnualExpenses,
+      atRetirement: Math.round(spendingAtRetirement),
+      portfolioNeeded: Math.round(portfolioNeeded),
+      funded,
+      monthCount: actualMonthCount,
+    };
+  }, [actualAnnualExpenses, actualMonthCount, settings.retirementAge, settings.safeWithdrawalRate, readiness.projectedPortfolio]);
+
   return (
     <div className="scenario-panel" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       {/* Header */}
@@ -477,6 +517,52 @@ export default function RetirementProjectionPanel() {
       {/* ── Overview Tab ───────────────────────────────────────── */}
       {activeTab === 'overview' && !isRecalculating && (
         <div style={S.sectionGap}>
+          {/* Actual spending info card */}
+          {spendingReadiness ? (
+            <div style={{
+              ...S.card,
+              borderLeft: '4px solid #10b981',
+              background: '#f0fdf4',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={S.cardTitle}>📊 Actual Spending Analysis</div>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                  background: '#dcfce7', color: '#166534',
+                }}>
+                  LIVE DATA
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                <div style={{ padding: '12px 16px', background: '#fff', borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 11, color: COLORS.textMuted }}>Current Annual Spending</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.textPrimary }}>{formatCurrency(spendingReadiness.currentAnnual)}</div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>Based on {spendingReadiness.monthCount} month{spendingReadiness.monthCount !== 1 ? 's' : ''} of data</div>
+                </div>
+                <div style={{ padding: '12px 16px', background: '#fff', borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 11, color: COLORS.textMuted }}>Projected at Retirement (Age {settings.retirementAge})</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.textPrimary }}>{formatCurrency(spendingReadiness.atRetirement)}</div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>With 3% annual inflation</div>
+                </div>
+                <div style={{ padding: '12px 16px', background: '#fff', borderRadius: 10, border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 11, color: COLORS.textMuted }}>Portfolio Needed to Sustain</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#10b981' }}>{formatCurrency(spendingReadiness.portfolioNeeded, true)}</div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>At {formatPercent(settings.safeWithdrawalRate, 1)} SWR</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              ...S.card,
+              borderLeft: `4px solid ${COLORS.orange}`,
+              background: '#fffbeb',
+              padding: '16px 20px',
+            }}>
+              <div style={{ fontSize: 13, color: '#78350f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                💡 Import transactions for actual-based projections
+              </div>
+            </div>
+          )}
           {/* Hero metric */}
           <div style={{
             background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
@@ -541,6 +627,63 @@ export default function RetirementProjectionPanel() {
               {readiness.warnings.map((w, i) => (
                 <div key={i} style={{ fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>• {w}</div>
               ))}
+            </div>
+          )}
+
+          {/* Retirement Readiness: Two Perspectives */}
+          {spendingReadiness && (
+            <div style={S.card}>
+              <div style={S.cardTitle}>🎯 Retirement Readiness — Two Perspectives</div>
+              <p style={S.cardSub}>Comparing income replacement vs. actual lifestyle sustenance</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+                {/* Income Replacement */}
+                <div style={{
+                  padding: '20px 24px', borderRadius: 12, background: COLORS.bgPage,
+                  border: `2px solid ${COLORS.border}`,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 12 }}>
+                    💼 Based on 80% Income Replacement
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: COLORS.base, marginBottom: 4 }}>
+                    {readinessPercent}%
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.6 }}>
+                    Target: {formatCurrency(readiness.targetPortfolio, true)} portfolio
+                    <br />
+                    Projected: {formatCurrency(readiness.projectedPortfolio, true)}
+                    <br />
+                    Monthly income: {formatCurrency(readiness.totalRetirementIncome / 12)}
+                  </div>
+                </div>
+                {/* Actual Spending */}
+                <div style={{
+                  padding: '20px 24px', borderRadius: 12,
+                  background: '#f0fdf420',
+                  border: '2px solid #10b98140',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>
+                      📊 Based on Actual Spending + Inflation
+                    </div>
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8,
+                      background: '#dcfce7', color: '#166534',
+                    }}>
+                      ACTUAL
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#10b981', marginBottom: 4 }}>
+                    {spendingReadiness.funded}%
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.6 }}>
+                    Current spending: {formatCurrency(spendingReadiness.currentAnnual)}/yr
+                    <br />
+                    At retirement: {formatCurrency(spendingReadiness.atRetirement)}/yr (3% inflation)
+                    <br />
+                    Portfolio needed: {formatCurrency(spendingReadiness.portfolioNeeded, true)} ({formatPercent(settings.safeWithdrawalRate, 1)} SWR)
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

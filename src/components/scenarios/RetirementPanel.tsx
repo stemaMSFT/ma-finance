@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   AreaChart,
   Area,
@@ -72,13 +72,14 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key'];
 
 // ── FIRE variant helpers ───────────────────────────────────────────
-type StandardVariant = Exclude<FIREVariant, 'custom'>;
+type StandardVariant = Exclude<FIREVariant, 'custom'> | 'actual';
 
 const VARIANT_COLORS: Record<StandardVariant, string> = {
   lean: COLORS.lean,
   regular: COLORS.regular,
   chubby: COLORS.chubby,
   fat: COLORS.fat,
+  actual: '#10b981',
 };
 
 const VARIANT_EMOJIS: Record<StandardVariant, string> = {
@@ -86,6 +87,7 @@ const VARIANT_EMOJIS: Record<StandardVariant, string> = {
   regular: '🏠',
   chubby: '✨',
   fat: '👑',
+  actual: '📊',
 };
 
 // ── Tooltip style (glassmorphism) ──────────────────────────────────
@@ -165,16 +167,81 @@ export default function RetirementPanel() {
   const [growthRate, setGrowthRate] = useState(7); // displayed as percent
   const [variant, setVariant] = useState<StandardVariant>('chubby');
 
+  // Actual expense data from imports
+  const [actualAnnualExpenses, setActualAnnualExpenses] = useState<number | null>(null);
+  const [actualAnnualSavings, setActualAnnualSavings] = useState<number | null>(null);
+  const [actualMonthCount, setActualMonthCount] = useState(0);
+  const [hasActualData, setHasActualData] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/expenses')
+      .then((r) => r.json())
+      .then((data: { imported: boolean; transactions: { date: string; amount: number; transactionType: string; mappedCategory: string }[] }) => {
+        if (!data.imported || !data.transactions?.length) return;
+        const filtered = data.transactions.filter(
+          (t) => t.transactionType === 'expense' && t.date >= '2025-05'
+        );
+        if (filtered.length === 0) return;
+
+        const months = new Set(filtered.map((t) => t.date.slice(0, 7)));
+        const monthCount = Math.max(months.size, 1);
+        const totalExpenses = filtered.reduce((s, t) => s + t.amount, 0);
+        const annualExp = (totalExpenses / monthCount) * 12;
+
+        // Compute take-home pay (same logic as CashFlowPanel)
+        const combinedBase = 158_412 + 140_000;
+        const combinedBonus = combinedBase * 0.10;
+        const cashIncome = combinedBase + combinedBonus;
+        const preTax401k = 49_000;
+        const preTaxHSA = 8_550;
+        const standardDeduction = 32_300;
+        const federalTaxable = Math.max(0, cashIncome - preTax401k - preTaxHSA - standardDeduction);
+        const brackets = [
+          { limit: 24_800, rate: 0.10 },
+          { limit: 76_000, rate: 0.12 },
+          { limit: 110_600, rate: 0.22 },
+          { limit: 192_150, rate: 0.24 },
+          { limit: 108_900, rate: 0.32 },
+          { limit: 256_250, rate: 0.35 },
+          { limit: Infinity, rate: 0.37 },
+        ];
+        let federalIncomeTax = 0;
+        let rem = federalTaxable;
+        for (const { limit, rate } of brackets) {
+          const inBracket = Math.min(rem, limit);
+          federalIncomeTax += inBracket * rate;
+          rem -= inBracket;
+          if (rem <= 0) break;
+        }
+        const ssWageBase = 176_100;
+        const stevenFICA = Math.min(158_412, ssWageBase) * 0.0765 + Math.max(0, 158_412 - 200_000) * 0.009;
+        const sonyaFICA = Math.min(140_000, ssWageBase) * 0.0765 + Math.max(0, 140_000 - 200_000) * 0.009;
+        const totalTaxes = federalIncomeTax + stevenFICA + sonyaFICA;
+        const takeHome = cashIncome - preTax401k - preTaxHSA - totalTaxes;
+        const savings = takeHome - annualExp;
+
+        setActualAnnualExpenses(Math.round(annualExp));
+        setActualAnnualSavings(Math.round(savings));
+        setActualMonthCount(monthCount);
+        setHasActualData(true);
+
+        // Update defaults with actual values
+        setAnnualExpenses(Math.round(annualExp));
+        setAnnualSavings(Math.round(Math.max(0, savings)));
+      })
+      .catch(() => {});
+  }, []);
+
   // ── Engine config ──────────────────────────────────────────────
   const config = useMemo<FIREConfig>(() => ({
     currentAge,
     targetRetirementAge,
     currentPortfolio,
     annualSavings,
-    annualExpenses: variant === 'chubby' ? annualExpenses : FIRE_SPENDING_TIERS[variant].annualExpenses,
+    annualExpenses: (variant === 'chubby' || variant === 'actual') ? annualExpenses : FIRE_SPENDING_TIERS[variant as Exclude<FIREVariant, 'custom'>].annualExpenses,
     safeWithdrawalRate: swr / 100,
     expectedGrowthRate: growthRate / 100,
-    variant,
+    variant: variant === 'actual' ? 'custom' : variant,
   }), [currentAge, targetRetirementAge, currentPortfolio, annualSavings, annualExpenses, swr, growthRate, variant]);
 
   const result = useMemo(() => runFIREAnalysis(config), [config]);
@@ -186,7 +253,9 @@ export default function RetirementPanel() {
   }, [currentPortfolio, result.coastFIRENumber]);
 
   const variantColor = VARIANT_COLORS[variant];
-  const variantTier = FIRE_SPENDING_TIERS[variant];
+  const variantTier = variant === 'actual'
+    ? { label: 'Actual Spending', annualExpenses, description: `Based on ${actualMonthCount} months of imported data` }
+    : FIRE_SPENDING_TIERS[variant as Exclude<FIREVariant, 'custom'>];
 
   return (
     <div className="scenario-panel" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
@@ -288,7 +357,7 @@ export default function RetirementPanel() {
                 const v = s.variant as StandardVariant;
                 const color = VARIANT_COLORS[v];
                 const emoji = VARIANT_EMOJIS[v];
-                const tier = FIRE_SPENDING_TIERS[v];
+                const tier = FIRE_SPENDING_TIERS[v as Exclude<FIREVariant, 'custom'>];
                 const isSelected = v === variant;
                 return (
                   <div key={v} style={{
@@ -632,6 +701,11 @@ export default function RetirementPanel() {
               format={(v) => formatCurrency(v, true)}
               onChange={setAnnualSavings}
             />
+            {hasActualData && (
+              <div style={{ fontSize: 11, color: '#14b8a6', marginTop: -10, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                📊 Based on actual data (May 2025+, {actualMonthCount} month{actualMonthCount !== 1 ? 's' : ''})
+              </div>
+            )}
           </div>
 
           {/* FIRE Variant selector */}
@@ -639,7 +713,7 @@ export default function RetirementPanel() {
             <div style={S.cardTitle}>🔥 FIRE Variant</div>
             <p style={S.cardSub}>Select your target lifestyle tier — determines annual expenses and FIRE Number</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
-              {(Object.keys(FIRE_SPENDING_TIERS) as StandardVariant[]).map((v) => {
+              {(Object.keys(FIRE_SPENDING_TIERS) as Exclude<FIREVariant, 'custom'>[]).map((v) => {
                 const active = variant === v;
                 const color = VARIANT_COLORS[v];
                 const tier = FIRE_SPENDING_TIERS[v];
@@ -657,14 +731,50 @@ export default function RetirementPanel() {
                   </button>
                 );
               })}
+              {/* Actual variant button */}
+              <button onClick={() => setVariant('actual')} style={{
+                padding: '12px 16px', borderRadius: 10, border: '2px solid',
+                borderColor: variant === 'actual' ? VARIANT_COLORS.actual : COLORS.border,
+                background: variant === 'actual' ? VARIANT_COLORS.actual + '12' : '#fff',
+                cursor: hasActualData ? 'pointer' : 'not-allowed',
+                textAlign: 'left', transition: 'all 0.15s ease',
+                opacity: hasActualData ? 1 : 0.5,
+                gridColumn: '1 / -1',
+              }} disabled={!hasActualData}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: variant === 'actual' ? VARIANT_COLORS.actual : COLORS.textPrimary }}>
+                    📊 Actual Spending
+                  </div>
+                  {hasActualData && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                      background: '#dcfce7', color: '#166534',
+                    }}>
+                      LIVE DATA
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>
+                  {hasActualData
+                    ? `${formatCurrency(actualAnnualExpenses ?? 0)}/yr — from ${actualMonthCount} months of imported transactions`
+                    : 'Import transactions to enable actual-based projections'}
+                </div>
+              </button>
             </div>
-            {variant === 'chubby' && (
-              <SliderRow
-                label="Annual Expenses (Chubby FIRE — adjustable)"
-                value={annualExpenses} min={100_000} max={200_000} step={1_000}
-                format={(v) => formatCurrency(v, true)}
-                onChange={setAnnualExpenses}
-              />
+            {(variant === 'chubby' || variant === 'actual') && (
+              <>
+                <SliderRow
+                  label={variant === 'actual' ? 'Annual Expenses (Actual — adjustable)' : 'Annual Expenses (Chubby FIRE — adjustable)'}
+                  value={annualExpenses} min={50_000} max={250_000} step={1_000}
+                  format={(v) => formatCurrency(v, true)}
+                  onChange={setAnnualExpenses}
+                />
+                {variant === 'actual' && hasActualData && (
+                  <div style={{ fontSize: 11, color: '#14b8a6', marginTop: -10, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    📊 Based on actual data (May 2025+, {actualMonthCount} month{actualMonthCount !== 1 ? 's' : ''})
+                  </div>
+                )}
+              </>
             )}
           </div>
 
