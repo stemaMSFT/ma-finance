@@ -6,6 +6,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
+  Sankey, Rectangle,
 } from 'recharts';
 import { calcCompensation, type PersonComp } from '../../engine/mockEngine';
 import { EXPENSE_CATEGORIES } from '../../engine/expenses';
@@ -155,6 +156,89 @@ export default function CashFlowPanel() {
   const totalSaved = totalPreTaxDeductions + Math.max(0, annualSurplus);
   const savingsRateOfGross = cashIncome > 0 ? (totalSaved / cashIncome) * 100 : 0;
 
+  // ── Sankey Diagram Data ────────────────────────────────────────
+  const sankeyData = useMemo(() => {
+    const stevenPay = STEVEN_COMP.baseSalary + (STEVEN_COMP.baseSalary * STEVEN_COMP.bonusTargetPercent / 100);
+    const sonyaPay = SONYA_COMP.baseSalary + (SONYA_COMP.baseSalary * SONYA_COMP.bonusTargetPercent / 100);
+    const totalPay = stevenPay + sonyaPay;
+    const stevenShare = totalPay > 0 ? stevenPay / totalPay : 0.5;
+    const sonyaShare = 1 - stevenShare;
+
+    // Build expense nodes: top 8 + "Other"
+    const sorted = [...expenseData.categories].sort((a, b) => b.annual - a.annual);
+    const top8 = sorted.slice(0, 8);
+    const otherTotal = sorted.slice(8).reduce((s, c) => s + c.annual, 0);
+    const surplus = Math.max(0, annualSurplus);
+    const negativeSurplus = annualSurplus < 0;
+
+    const nodes: Array<{ name: string }> = [
+      // 0, 1: income sources
+      { name: "Steven's Pay" },
+      { name: "Sonya's Pay" },
+      // 2-6: deductions/taxes/take-home
+      { name: '401k' },
+      { name: 'HSA' },
+      { name: 'Federal Tax' },
+      { name: 'FICA' },
+      { name: 'Take-Home' },
+    ];
+
+    // 7+: expense categories
+    const expenseNodes: Array<{ name: string; annual: number }> = [];
+    for (const c of top8) {
+      const { label, icon } = getCategoryInfo(c.id);
+      expenseNodes.push({ name: `${icon} ${label}`, annual: c.annual });
+    }
+    if (otherTotal > 0) {
+      expenseNodes.push({ name: '📦 Other Expenses', annual: otherTotal });
+    }
+    if (surplus > 0 || negativeSurplus) {
+      expenseNodes.push({ name: negativeSurplus ? '🔴 Deficit' : '✅ Surplus', annual: negativeSurplus ? 0 : surplus });
+    }
+
+    for (const en of expenseNodes) {
+      nodes.push({ name: en.name });
+    }
+
+    const TAKE_HOME_IDX = 6;
+    const links: Array<{ source: number; target: number; value: number }> = [];
+    const minVal = 100; // minimum link value for visibility
+
+    // Column 1 → Column 2: Steven's Pay and Sonya's Pay to deductions/taxes/take-home
+    const steven401k = Math.round(preTax401k * stevenShare);
+    const sonya401k = preTax401k - steven401k;
+    const stevenHSA = Math.round(preTaxHSA * stevenShare);
+    const sonyaHSA = preTaxHSA - stevenHSA;
+    const stevenFedTax = Math.round(federalIncomeTax * stevenShare);
+    const sonyaFedTax = federalIncomeTax - stevenFedTax;
+    const stevenTakeHome = Math.round(stevenPay - steven401k - stevenHSA - stevenFedTax - stevenFICA);
+    const sonyaTakeHome = Math.round(sonyaPay - sonya401k - sonyaHSA - sonyaFedTax - sonyaFICA);
+
+    // Steven links
+    if (steven401k > minVal) links.push({ source: 0, target: 2, value: steven401k });
+    if (stevenHSA > minVal) links.push({ source: 0, target: 3, value: stevenHSA });
+    if (stevenFedTax > minVal) links.push({ source: 0, target: 4, value: stevenFedTax });
+    if (stevenFICA > minVal) links.push({ source: 0, target: 5, value: Math.round(stevenFICA) });
+    if (stevenTakeHome > minVal) links.push({ source: 0, target: TAKE_HOME_IDX, value: stevenTakeHome });
+
+    // Sonya links
+    if (sonya401k > minVal) links.push({ source: 1, target: 2, value: sonya401k });
+    if (sonyaHSA > minVal) links.push({ source: 1, target: 3, value: sonyaHSA });
+    if (sonyaFedTax > minVal) links.push({ source: 1, target: 4, value: sonyaFedTax });
+    if (sonyaFICA > minVal) links.push({ source: 1, target: 5, value: Math.round(sonyaFICA) });
+    if (sonyaTakeHome > minVal) links.push({ source: 1, target: TAKE_HOME_IDX, value: sonyaTakeHome });
+
+    // Column 2 → Column 3: Take-Home to expenses + surplus
+    for (let i = 0; i < expenseNodes.length; i++) {
+      const val = expenseNodes[i].annual;
+      if (val > minVal) {
+        links.push({ source: TAKE_HOME_IDX, target: 7 + i, value: Math.round(val) });
+      }
+    }
+
+    return { nodes, links, negativeSurplus };
+  }, [expenseData, annualSurplus, preTax401k, preTaxHSA, federalIncomeTax, stevenFICA, sonyaFICA]);
+
   // ── Waterfall Chart Data ──────────────────────────────────────
   const waterfallData = [
     { name: 'Cash Income', value: cashIncome, type: 'income' },
@@ -190,6 +274,31 @@ export default function CashFlowPanel() {
       <p style={{ color: '#64748b', marginBottom: 24 }}>
         Where every dollar goes — from gross income to surplus
       </p>
+
+      {/* ── Sankey Money Flow Diagram ─────────────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>💸 Money Flow</h3>
+        <p style={{ color: '#64748b', fontSize: 13, marginBottom: 16 }}>
+          How every dollar flows from paychecks to final destinations
+        </p>
+        <ResponsiveContainer width="100%" height={500}>
+          <Sankey
+            data={{ nodes: sankeyData.nodes, links: sankeyData.links }}
+            nodeWidth={10}
+            nodePadding={24}
+            margin={{ top: 20, right: 200, bottom: 20, left: 200 }}
+            node={<SankeyNode />}
+            link={<SankeyLink />}
+          >
+            <Tooltip content={<SankeyTooltip />} />
+          </Sankey>
+        </ResponsiveContainer>
+        {sankeyData.negativeSurplus && (
+          <p style={{ color: '#dc2626', fontSize: 13, marginTop: 8, textAlign: 'center' }}>
+            ⚠️ Expenses exceed take-home pay — surplus shown as zero in the flow diagram
+          </p>
+        )}
+      </div>
 
       {/* ── Waterfall Chart ─────────────────────────────────────── */}
       <div style={cardStyle}>
@@ -352,6 +461,121 @@ export default function CashFlowPanel() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Sankey Custom Components ──────────────────────────────────────
+
+const SANKEY_NODE_COLORS: Record<string, string> = {
+  "Steven's Pay": '#10b981',
+  "Sonya's Pay": '#10b981',
+  '401k': '#3b82f6',
+  'HSA': '#3b82f6',
+  'Federal Tax': '#f97316',
+  'FICA': '#f97316',
+  'Take-Home': '#6366f1',
+  '🔴 Deficit': '#dc2626',
+  '✅ Surplus': '#059669',
+};
+
+function getSankeyNodeColor(name: string): string {
+  if (SANKEY_NODE_COLORS[name]) return SANKEY_NODE_COLORS[name];
+  return '#64748b'; // expense categories
+}
+
+function getSankeyLinkColor(targetName: string): { stroke: string; opacity: number } {
+  if (targetName === '401k' || targetName === 'HSA') return { stroke: '#3b82f6', opacity: 0.3 };
+  if (targetName === 'Federal Tax' || targetName === 'FICA') return { stroke: '#f97316', opacity: 0.3 };
+  if (targetName === 'Take-Home') return { stroke: '#6366f1', opacity: 0.25 };
+  if (targetName === '✅ Surplus') return { stroke: '#059669', opacity: 0.3 };
+  return { stroke: '#64748b', opacity: 0.2 };
+}
+
+function SankeyNode(props: any) {
+  const { x, y, width, height, index, payload } = props;
+  if (!payload) return null;
+  const color = getSankeyNodeColor(payload.name);
+  const chartWidth = props.containerWidth || 960;
+  const isLeft = x < chartWidth / 3;
+
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill={color} rx={2} />
+      <text
+        x={isLeft ? x - 6 : x + width + 6}
+        y={y + height / 2}
+        textAnchor={isLeft ? 'end' : 'start'}
+        dominantBaseline="middle"
+        fontSize={12}
+        fontWeight={500}
+        fill="#334155"
+      >
+        {payload.name}
+      </text>
+      <text
+        x={isLeft ? x - 6 : x + width + 6}
+        y={y + height / 2 + 15}
+        textAnchor={isLeft ? 'end' : 'start'}
+        dominantBaseline="middle"
+        fontSize={11}
+        fill="#94a3b8"
+      >
+        {formatCurrency(payload.value)}
+      </text>
+    </g>
+  );
+}
+
+function SankeyLink(props: any) {
+  const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, payload } = props;
+  if (!payload) return null;
+  const targetName = payload.target?.name || '';
+  const { stroke, opacity } = getSankeyLinkColor(targetName);
+
+  return (
+    <path
+      d={`
+        M${sourceX},${sourceY + linkWidth / 2}
+        C${sourceControlX},${sourceY + linkWidth / 2}
+          ${targetControlX},${targetY + linkWidth / 2}
+          ${targetX},${targetY + linkWidth / 2}
+        L${targetX},${targetY - linkWidth / 2}
+        C${targetControlX},${targetY - linkWidth / 2}
+          ${sourceControlX},${sourceY - linkWidth / 2}
+          ${sourceX},${sourceY - linkWidth / 2}
+        Z
+      `}
+      fill={stroke}
+      fillOpacity={opacity}
+      stroke={stroke}
+      strokeOpacity={opacity + 0.1}
+      strokeWidth={0.5}
+    />
+  );
+}
+
+function SankeyTooltip({ active, payload }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0]?.payload?.payload || payload[0]?.payload;
+  if (!data) return null;
+
+  const name = data.source?.name && data.target?.name
+    ? `${data.source.name} → ${data.target.name}`
+    : data.name || '';
+  const value = data.value || 0;
+
+  return (
+    <div style={{
+      background: '#fff',
+      border: '1px solid #e2e8f0',
+      borderRadius: 8,
+      padding: '8px 12px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+      fontSize: 13,
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>{name}</div>
+      <div style={{ color: '#475569' }}>{formatCurrency(value)}</div>
     </div>
   );
 }
