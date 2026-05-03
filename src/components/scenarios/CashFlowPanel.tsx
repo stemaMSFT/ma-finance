@@ -3,7 +3,7 @@
  * Shows where all household money goes: income → deductions → taxes → expenses → surplus.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
   Sankey, Rectangle,
@@ -67,6 +67,43 @@ export default function CashFlowPanel() {
     const totalMonthly = categories.reduce((sum, c) => sum + c.monthly, 0);
     return { categories, totalMonthly, totalAnnual: totalMonthly * 12, monthCount };
   }, [transactions]);
+
+  // ── Recent Transactions by Category (most recent month) ─────
+  const recentTransactions = useMemo(() => {
+    const filtered = transactions.filter(
+      t => t.transactionType === 'expense' && t.date >= '2025-05'
+    );
+    if (!filtered.length) return {};
+
+    const months = [...new Set(filtered.map(t => t.date.slice(0, 7)))].sort().reverse();
+    const recentMonth = months[0];
+
+    const byCategory: Record<string, Array<{ date: string; description: string; amount: number }>> = {};
+    for (const t of filtered.filter(t => t.date.startsWith(recentMonth))) {
+      const cat = t.mappedCategory || 'misc';
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push({
+        date: t.date,
+        description: t.description || 'Unknown',
+        amount: t.amount,
+      });
+    }
+    for (const cat of Object.keys(byCategory)) {
+      byCategory[cat].sort((a, b) => b.amount - a.amount);
+    }
+    return { month: recentMonth, byCategory };
+  }, [transactions]);
+
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (id: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // ── Bottom Line ───────────────────────────────────────────────
   const monthlySurplus = takeHomePay / 12 - expenseData.totalMonthly;
@@ -180,6 +217,12 @@ export default function CashFlowPanel() {
   function getCategoryInfo(id: string) {
     const cat = EXPENSE_CATEGORIES.find((c) => c.id === id);
     return { label: cat?.label || id, icon: cat?.icon || '📦' };
+  }
+
+  function formatMonth(yyyymm: string): string {
+    const [year, month] = yyyymm.split('-');
+    const date = new Date(Number(year), Number(month) - 1);
+    return date.toLocaleString('default', { month: 'long', year: 'numeric' });
   }
 
   if (loading) {
@@ -319,14 +362,70 @@ export default function CashFlowPanel() {
           <p style={{ color: '#94a3b8' }}>No expense data available. Import transactions to see actuals.</p>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '6px 16px', alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '6px 16px', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontWeight: 600, fontSize: 12, color: '#94a3b8' }}>CATEGORY</span>
               <span style={{ fontWeight: 600, fontSize: 12, color: '#94a3b8', textAlign: 'right' }}>MONTHLY</span>
               <span style={{ fontWeight: 600, fontSize: 12, color: '#94a3b8', textAlign: 'right' }}>ANNUAL</span>
+            </div>
+            <div>
               {expenseData.categories.map((c) => {
                 const { label, icon } = getCategoryInfo(c.id);
                 return (
-                  <ExpenseRow key={c.id} icon={icon} label={label} monthly={c.monthly} annual={c.annual} />
+                  <div key={c.id}>
+                    <div
+                      onClick={() => toggleCategory(c.id)}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto auto',
+                        gap: '6px 16px',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        padding: '8px 0',
+                        borderBottom: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <span style={{ fontSize: 13 }}>
+                        <span style={{ marginRight: 6 }}>{expandedCategories.has(c.id) ? '▾' : '▸'}</span>
+                        {icon} {label}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right' }}>
+                        {formatCurrency(c.monthly)}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', color: '#64748b' }}>
+                        {formatCurrency(c.annual)}
+                      </span>
+                    </div>
+                    {expandedCategories.has(c.id) && recentTransactions.byCategory?.[c.id] && (
+                      <div style={{
+                        padding: '8px 0 12px 28px',
+                        background: '#f8fafc',
+                        borderRadius: 8,
+                        margin: '4px 0 8px',
+                      }}>
+                        <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px', fontWeight: 600 }}>
+                          {formatMonth(recentTransactions.month!)} transactions ({recentTransactions.byCategory[c.id].length})
+                        </p>
+                        {recentTransactions.byCategory[c.id].map((t, i) => (
+                          <div key={i} style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '3px 8px',
+                            fontSize: 12,
+                            color: '#475569',
+                            borderBottom: i < recentTransactions.byCategory[c.id].length - 1 ? '1px solid #e2e8f0' : 'none',
+                          }}>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
+                              {t.description}
+                            </span>
+                            <span style={{ marginLeft: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {formatCurrency(t.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -518,16 +617,6 @@ function FlowRow({ label, value, color, negative }: { label: string; value: numb
       <span style={{ textAlign: 'right', fontWeight: 600, color }}>
         {negative ? '−' : ''}{formatCurrency(value)}
       </span>
-    </>
-  );
-}
-
-function ExpenseRow({ icon, label, monthly, annual }: { icon: string; label: string; monthly: number; annual: number }) {
-  return (
-    <>
-      <span style={{ fontSize: 14 }}>{icon} {label}</span>
-      <span style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(monthly)}</span>
-      <span style={{ textAlign: 'right', fontSize: 13, color: '#64748b' }}>{formatCurrency(annual)}</span>
     </>
   );
 }
