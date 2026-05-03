@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatCurrency } from '../../utils/format';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LineChart, Line, Legend,
@@ -53,18 +54,7 @@ export interface ExpenseImportPanelProps {
 // ── Colors ────────────────────────────────────────────────────────
 
 const COLORS = {
-  accent: '#6c63ff',
-  teal: '#14b8a6',
-  orange: '#f59e0b',
-  red: '#ef4444',
-  green: '#22c55e',
-  blue: '#3b82f6',
-  purple: '#8b5cf6',
-  bgCard: '#ffffff',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
+  ...SHARED_COLORS,
   dropBg: '#f8fafc',
   dropBorder: '#cbd5e1',
 };
@@ -91,13 +81,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 // ── Styles ────────────────────────────────────────────────────────
 
 const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
+  card: SHARED_S.card,
   title: {
     fontSize: 15,
     fontWeight: 700,

@@ -19,49 +19,22 @@ import {
 import type { FIREConfig, FIREVariant } from '../../engine/types';
 import { STEVEN_COMP, SONYA_COMP, HSA_FAMILY_LIMIT } from '../../config/household';
 import { calcHouseholdTaxes } from '../../engine/taxes';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
+import { useExpenseData } from '../../hooks/useExpenseData';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
+  ...SHARED_COLORS,
   fire: '#ef4444',
   coast: '#14b8a6',
   lean: '#3b82f6',
   regular: '#22c55e',
   chubby: '#f59e0b',
   fat: '#8b5cf6',
-  accent: '#6c63ff',
-  gray: '#94a3b8',
-  bgCard: '#ffffff',
   bgPage: '#f8fafc',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
 };
 
-const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    letterSpacing: '-0.01em',
-  } as React.CSSProperties,
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    margin: '0 0 16px 0',
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  sectionGap: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
-  axisTick: { fontSize: 11, fill: COLORS.textMuted },
-};
+const S = { ...SHARED_S };
 
 // ── Tab configuration ──────────────────────────────────────────────
 const TABS = [
@@ -170,42 +143,28 @@ export default function RetirementPanel() {
   const [variant, setVariant] = useState<StandardVariant>('chubby');
 
   // Actual expense data from imports
-  const [actualAnnualExpenses, setActualAnnualExpenses] = useState<number | null>(null);
-  const [actualAnnualSavings, setActualAnnualSavings] = useState<number | null>(null);
-  const [actualMonthCount, setActualMonthCount] = useState(0);
-  const [hasActualData, setHasActualData] = useState(false);
+  const expenseHook = useExpenseData();
 
+  // Derive actual values from hook
+  const actualAnnualExpenses = expenseHook.hasData ? expenseHook.annualExpenses : null;
+  const actualMonthCount = expenseHook.monthCount;
+  const hasActualData = expenseHook.hasData;
+
+  // Compute actual savings when expense data is available
+  const actualAnnualSavings = useMemo(() => {
+    if (!expenseHook.hasData) return null;
+    const householdTaxes = calcHouseholdTaxes(STEVEN_COMP, SONYA_COMP);
+    return Math.round(householdTaxes.takeHome - expenseHook.annualExpenses);
+  }, [expenseHook.hasData, expenseHook.annualExpenses]);
+
+  // Update defaults when actual data loads
   useEffect(() => {
-    fetch('/api/expenses')
-      .then((r) => r.json())
-      .then((data: { imported: boolean; transactions: { date: string; amount: number; transactionType: string; mappedCategory: string }[] }) => {
-        if (!data.imported || !data.transactions?.length) return;
-        const filtered = data.transactions.filter(
-          (t) => t.transactionType === 'expense' && t.date >= '2025-05'
-        );
-        if (filtered.length === 0) return;
-
-        const months = new Set(filtered.map((t) => t.date.slice(0, 7)));
-        const monthCount = Math.max(months.size, 1);
-        const totalExpenses = filtered.reduce((s, t) => s + t.amount, 0);
-        const annualExp = (totalExpenses / monthCount) * 12;
-
-        // Compute take-home pay using shared tax module
-        const householdTaxes = calcHouseholdTaxes(STEVEN_COMP, SONYA_COMP);
-        const takeHome = householdTaxes.takeHome;
-        const savings = takeHome - annualExp;
-
-        setActualAnnualExpenses(Math.round(annualExp));
-        setActualAnnualSavings(Math.round(savings));
-        setActualMonthCount(monthCount);
-        setHasActualData(true);
-
-        // Update defaults with actual values
-        setAnnualExpenses(Math.round(annualExp));
-        setAnnualSavings(Math.round(Math.max(0, savings)));
-      })
-      .catch(() => {});
-  }, []);
+    if (!expenseHook.hasData) return;
+    const householdTaxes = calcHouseholdTaxes(STEVEN_COMP, SONYA_COMP);
+    const savings = householdTaxes.takeHome - expenseHook.annualExpenses;
+    setAnnualExpenses(expenseHook.annualExpenses);
+    setAnnualSavings(Math.round(Math.max(0, savings)));
+  }, [expenseHook.hasData, expenseHook.annualExpenses]);
 
   // ── Engine config ──────────────────────────────────────────────
   const config = useMemo<FIREConfig>(() => ({

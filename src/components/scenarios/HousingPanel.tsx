@@ -30,9 +30,12 @@ import {
 } from '../../engine/constants';
 import type { EastsideCity, PropertyType, HousingInput } from '../../engine/types';
 import { formatCurrency, formatPercent } from '../../utils/format';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
+import GlassTooltip from '../shared/GlassTooltip';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
+  ...SHARED_COLORS,
   conservative: '#22c55e',
   comfortable: '#3b82f6',
   stretch: '#f59e0b',
@@ -40,40 +43,10 @@ const COLORS = {
   kirkland: '#6c63ff',
   redmond: '#14b8a6',
   bellevue: '#f59e0b',
-  accent: '#6c63ff',
-  gray: '#94a3b8',
-  bgCard: '#ffffff',
   bgPage: '#f8fafc',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
 };
 
-const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    letterSpacing: '-0.01em',
-  } as React.CSSProperties,
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    margin: '0 0 16px 0',
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  sectionGap: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
-  axisTick: { fontSize: 11, fill: COLORS.textMuted },
-};
+const S = { ...SHARED_S };
 
 // ── Tab config ─────────────────────────────────────────────────────
 type HousingTab = 'affordability' | 'costs' | 'market' | 'settings';
@@ -137,40 +110,7 @@ const CITY_INFO: Record<EastsideCity, {
   },
 };
 
-// ── Glassmorphism chart tooltip ────────────────────────────────────
-const ChartTooltip = ({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: { name: string; value: number; color?: string; fill?: string }[];
-  label?: string | number;
-}) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: 'rgba(255,255,255,0.97)',
-      border: `1px solid ${COLORS.border}`,
-      borderRadius: 10,
-      padding: '10px 14px',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
-      backdropFilter: 'blur(6px)',
-      minWidth: 160,
-    }}>
-      <p style={{ fontSize: 12, fontWeight: 700, color: COLORS.textPrimary, margin: '0 0 6px 0' }}>{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ fontSize: 12, color: COLORS.textSecondary, margin: '3px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color ?? p.fill ?? COLORS.accent, display: 'inline-block', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{p.name}</span>
-          <strong style={{ color: COLORS.textPrimary }}>{formatCurrency(p.value)}</strong>
-        </p>
-      ))}
-    </div>
-  );
-};
-
-// ── DTI Gauge ──────────────────────────────────────────────────────
+// ── DTI Gauge──────────────────────────────────────────────────────
 function DTIGauge({ dti }: { dti: number }) {
   const pct = Math.min(dti * 100, 50);
   const color = dti <= 0.28 ? COLORS.conservative : dti <= 0.36 ? COLORS.stretch : COLORS.danger;
@@ -630,7 +570,7 @@ export default function HousingPanel() {
                 <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
                 <XAxis dataKey="city" tick={S.axisTick} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} tickLine={false} width={72} />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<GlassTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="SFH" name="Single Family" fill={COLORS.kirkland} radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Condo" name="Condo" fill={COLORS.redmond} radius={[4, 4, 0, 0]} />
@@ -664,7 +604,7 @@ export default function HousingPanel() {
                 <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
                 <XAxis dataKey="year" tick={S.axisTick} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} tickLine={false} width={72} />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<GlassTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Area type="monotone" dataKey="Conservative" name="Conservative (3%)" stroke={COLORS.conservative} fill="url(#gradCons)" strokeWidth={2} dot={false} />
                 <Area type="monotone" dataKey="Moderate" name="Moderate (4.5%)" stroke={COLORS.comfortable} fill="url(#gradMod)" strokeWidth={2} dot={false} />

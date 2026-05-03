@@ -15,6 +15,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
+import GlassTooltip from '../shared/GlassTooltip';
 import CurrencyInput from '../shared/CurrencyInput';
 import PercentInput from '../shared/PercentInput';
 import InputGroup from '../shared/InputGroup';
@@ -24,50 +26,18 @@ import { formatCurrency, formatPercent } from '../../utils/format';
 import { createDefaultConfig, projectCompensationGrowth } from '../../engine/projection';
 import { STEVEN_COMP, SONYA_COMP } from '../../config/household';
 
-// ── Color tokens ───────────────────────────────────────────────────
+// ── Color tokens (extends shared theme) ────────────────────────────
 const COLORS = {
+  ...SHARED_COLORS,
   steven: '#6c63ff',
   partner: '#14b8a6',
-  accent: '#6c63ff',
   base: '#22c55e',
   optimistic: '#8b5cf6',
   conservative: '#3b82f6',
-  orange: '#f59e0b',
-  red: '#ef4444',
-  teal: '#14b8a6',
-  gray: '#94a3b8',
-  bgCard: '#ffffff',
   bgPage: '#f8fafc',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
 };
 
-const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    letterSpacing: '-0.01em',
-  } as React.CSSProperties,
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    margin: '0 0 16px 0',
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  sectionGap: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
-  axisTick: { fontSize: 11, fill: COLORS.textMuted },
-};
+const S = { ...SHARED_S };
 
 interfaceCompHistoryEntry {
   fy: string;
@@ -96,34 +66,6 @@ const BASE_PROGRESSION = [
 ];
 
 // ── Shared sub-components ──────────────────────────────────────────
-
-const ChartTooltip = ({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: { name: string; value: number; color?: string; fill?: string }[];
-  label?: string | number;
-}) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: 'rgba(255,255,255,0.97)', border: `1px solid ${COLORS.border}`,
-      borderRadius: 10, padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
-      backdropFilter: 'blur(6px)', minWidth: 160,
-    }}>
-      <p style={{ fontSize: 12, fontWeight: 700, color: COLORS.textPrimary, margin: '0 0 6px 0' }}>{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ fontSize: 12, color: COLORS.textSecondary, margin: '3px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color || p.fill || COLORS.accent, display: 'inline-block', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{p.name}</span>
-          <strong style={{ color: COLORS.textPrimary }}>{formatCurrency(p.value)}</strong>
-        </p>
-      ))}
-    </div>
-  );
-};
 
 function LoadingOverlay() {
   return (
@@ -364,7 +306,7 @@ export default function CompensationPanel() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                 <XAxis type="number" tickFormatter={(v: number) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: COLORS.textPrimary, fontWeight: 500 }} axisLine={false} tickLine={false} width={85} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
+                <Tooltip content={<GlassTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={8} />
                 <Bar dataKey="Steven" name="Steven" stackId="comp" fill={COLORS.steven} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="Sonya" name="Sonya" stackId="comp" fill={COLORS.partner} radius={[0, 4, 4, 0]} />
@@ -570,7 +512,7 @@ export default function CompensationPanel() {
                   tick={S.axisTick} axisLine={false} tickLine={false} width={68}
                   domain={[100_000, 170_000]}
                 />
-                <Tooltip content={<ChartTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+                <Tooltip content={<GlassTooltip />} cursor={{ strokeDasharray: '3 3' }} />
                 <ReferenceLine y={158_412} stroke={COLORS.accent} strokeDasharray="4 3"
                   label={{ value: 'Current', position: 'right', fontSize: 10, fill: COLORS.accent }} />
                 <Line
@@ -591,7 +533,7 @@ export default function CompensationPanel() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="fy" tick={S.axisTick} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v: number) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} tickLine={false} width={68} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
+                <Tooltip content={<GlassTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={8} />
                 <Bar dataKey="baseMidpoint" name="Base Salary" stackId="c" fill={COLORS.accent} />
                 <Bar dataKey="bonus" name="Bonus" stackId="c" fill={COLORS.teal} />
@@ -671,7 +613,7 @@ export default function CompensationPanel() {
                 <XAxis dataKey="age" tick={S.axisTick} axisLine={false} tickLine={false}
                   label={{ value: 'Age', position: 'insideBottom', offset: -2, fontSize: 11, fill: COLORS.textMuted }} />
                 <YAxis tickFormatter={(v: number) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} tickLine={false} width={68} />
-                <Tooltip content={<ChartTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+                <Tooltip content={<GlassTooltip />} cursor={{ strokeDasharray: '3 3' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={8} />
                 {compProjection.filter((yr) => yr.promotedThisYear).map((yr) => (
                   <ReferenceLine key={yr.age} x={yr.age} stroke={COLORS.orange} strokeDasharray="4 3"
@@ -692,7 +634,7 @@ export default function CompensationPanel() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="age" tick={S.axisTick} axisLine={false} tickLine={false} interval={2} />
                 <YAxis tickFormatter={(v: number) => formatCurrency(v, true)} tick={S.axisTick} axisLine={false} tickLine={false} width={68} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
+                <Tooltip content={<GlassTooltip />} cursor={{ fill: 'rgba(108,99,255,0.04)' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={8} />
                 <Bar dataKey="baseSalary" name="Base Salary" stackId="c" fill={COLORS.accent} />
                 <Bar dataKey="bonus" name="Bonus" stackId="c" fill={COLORS.teal} />

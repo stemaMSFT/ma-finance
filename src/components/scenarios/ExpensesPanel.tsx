@@ -28,23 +28,12 @@ import { calcCompensation } from '../../engine/mockEngine';
 import { SONYA_COMP } from '../../config/household';
 import ExpenseImportPanel from './ExpenseImportPanel';
 import type { Transaction, ImportMeta } from './ExpenseImportPanel';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
-  accent: '#6c63ff',
-  teal: '#14b8a6',
-  orange: '#f59e0b',
-  red: '#ef4444',
-  green: '#22c55e',
-  blue: '#3b82f6',
-  purple: '#8b5cf6',
-  gray: '#94a3b8',
-  bgCard: '#ffffff',
+  ...SHARED_COLORS,
   bgPage: '#f8fafc',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
 };
 
 const GROUP_COLORS: Record<ExpenseGroup, string> = {
@@ -61,29 +50,7 @@ const SAVINGS_GROUP_COLORS: Record<SavingsBucketGroup, string> = {
 };
 
 // ── Shared styles ──────────────────────────────────────────────────
-const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    letterSpacing: '-0.01em',
-  } as React.CSSProperties,
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    margin: '0 0 16px 0',
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  sectionGap: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
-};
+const S = { ...SHARED_S };
 
 // ── Pill tabs ──────────────────────────────────────────────────────
 const pillContainer: React.CSSProperties = {

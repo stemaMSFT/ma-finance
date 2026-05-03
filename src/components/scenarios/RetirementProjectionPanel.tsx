@@ -16,6 +16,8 @@ import {
   Cell,
 } from 'recharts';
 import { formatCurrency, formatPercent } from '../../utils/format';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
+import { useExpenseData } from '../../hooks/useExpenseData';
 import {
   createDefaultConfig,
   projectRetirementTimeline,
@@ -38,47 +40,15 @@ import type {
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
+  ...SHARED_COLORS,
   conservative: '#3b82f6',
   base: '#22c55e',
   optimistic: '#8b5cf6',
-  accent: '#6c63ff',
-  teal: '#14b8a6',
-  orange: '#f59e0b',
-  red: '#ef4444',
-  gray: '#94a3b8',
-  bgCard: '#ffffff',
   bgPage: '#f8fafc',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
 };
 
 // Shared style fragments
-const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    letterSpacing: '-0.01em',
-  } as React.CSSProperties,
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    margin: '0 0 16px 0',
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  sectionGap: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
-  axisTick: { fontSize: 11, fill: COLORS.textMuted },
-};
+const S = { ...SHARED_S };
 
 // ── Settings types ─────────────────────────────────────────────────
 interface ProjectionSettings {
@@ -327,28 +297,10 @@ export default function RetirementProjectionPanel() {
   const [settings, setSettings] = useState<ProjectionSettings>(DEFAULT_SETTINGS);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
-  // Actual expense data
-  const [actualAnnualExpenses, setActualAnnualExpenses] = useState<number | null>(null);
-  const [actualMonthCount, setActualMonthCount] = useState(0);
-
-  useEffect(() => {
-    fetch('/api/expenses')
-      .then((r) => r.json())
-      .then((data: { imported: boolean; transactions: { date: string; amount: number; transactionType: string; mappedCategory: string }[] }) => {
-        if (!data.imported || !data.transactions?.length) return;
-        const filtered = data.transactions.filter(
-          (t) => t.transactionType === 'expense' && t.date >= '2025-05'
-        );
-        if (filtered.length === 0) return;
-        const months = new Set(filtered.map((t) => t.date.slice(0, 7)));
-        const monthCount = Math.max(months.size, 1);
-        const totalExpenses = filtered.reduce((s, t) => s + t.amount, 0);
-        const annualExp = (totalExpenses / monthCount) * 12;
-        setActualAnnualExpenses(Math.round(annualExp));
-        setActualMonthCount(monthCount);
-      })
-      .catch(() => {});
-  }, []);
+  // Actual expense data from imports
+  const expenseHook = useExpenseData();
+  const actualAnnualExpenses = expenseHook.hasData ? expenseHook.annualExpenses : null;
+  const actualMonthCount = expenseHook.monthCount;
 
   const updateSetting = <K extends keyof ProjectionSettings>(key: K, value: ProjectionSettings[K]) =>
     setSettings(prev => ({ ...prev, [key]: value }));

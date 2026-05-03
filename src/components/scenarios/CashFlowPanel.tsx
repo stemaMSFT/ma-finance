@@ -3,7 +3,7 @@
  * Shows where all household money goes: income → deductions → taxes → expenses → surplus.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
   Sankey, Rectangle,
@@ -13,34 +13,12 @@ import { EXPENSE_CATEGORIES } from '../../engine/expenses';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { STEVEN_COMP, SONYA_COMP, HSA_FAMILY_LIMIT } from '../../config/household';
 import { calcHouseholdTaxes } from '../../engine/taxes';
-
-// ── Types ─────────────────────────────────────────────────────────
-
-interface Transaction {
-  date: string;
-  amount: number;
-  transactionType: string;
-  mappedCategory: string;
-  description?: string;
-}
+import { useExpenseData } from '../../hooks/useExpenseData';
 
 // ── Component ─────────────────────────────────────────────────────
 
 export default function CashFlowPanel() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/expenses')
-      .then((r) => r.json())
-      .then((data: { imported: boolean; transactions: Transaction[] }) => {
-        if (data.imported && data.transactions?.length > 0) {
-          setTransactions(data.transactions);
-        }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+  const { transactions, loading } = useExpenseData();
 
   // ── Compensation Calculations ─────────────────────────────────
   const steven = useMemo(() => calcCompensation(STEVEN_COMP), []);

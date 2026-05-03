@@ -22,48 +22,18 @@ import { monthlyPayment, futureValue } from '../../engine/projections';
 import { compareRenovationVsSave } from '../../engine/housing';
 import type { RenovationInput } from '../../engine/types';
 import { formatCurrency, formatPercent } from '../../utils/format';
+import { COLORS as SHARED_COLORS, S as SHARED_S } from '../../theme';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
+  ...SHARED_COLORS,
   renovate: '#22c55e',
   invest: '#6c63ff',
   neutral: '#3b82f6',
-  accent: '#6c63ff',
-  orange: '#f59e0b',
-  red: '#ef4444',
-  gray: '#94a3b8',
-  bgCard: '#ffffff',
   bgPage: '#f8fafc',
-  border: '#e2e8f0',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textMuted: '#94a3b8',
 };
 
-const S = {
-  card: {
-    background: COLORS.bgCard,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 14,
-    padding: '24px 28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    letterSpacing: '-0.01em',
-  } as React.CSSProperties,
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    margin: '0 0 16px 0',
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  sectionGap: { display: 'flex', flexDirection: 'column' as const, gap: 20 },
-  axisTick: { fontSize: 11, fill: COLORS.textMuted },
-};
+const S = { ...SHARED_S };
 
 // ── Tab config ─────────────────────────────────────────────────────
 type RenovTab = 'overview' | 'analysis' | 'projection' | 'settings';
