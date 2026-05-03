@@ -11,32 +11,7 @@ import {
 import { calcCompensation, type PersonComp } from '../../engine/mockEngine';
 import { EXPENSE_CATEGORIES } from '../../engine/expenses';
 import { formatCurrency, formatPercent } from '../../utils/format';
-
-// ── Compensation Defaults ─────────────────────────────────────────
-
-const STEVEN_COMP: PersonComp = {
-  baseSalary: 158_412,
-  bonusTargetPercent: 10,
-  rsuAnnual: 18_000,
-  employer401kMatchPercent: 50,
-  employer401kMatchLimit: 100,
-  employee401kContribution: 24_500,
-  esppDiscountPercent: 15,
-  esppContributionPercent: 10,
-};
-
-const SONYA_COMP: PersonComp = {
-  baseSalary: 140_000,
-  bonusTargetPercent: 10,
-  rsuAnnual: 25_000,
-  employer401kMatchPercent: 50,
-  employer401kMatchLimit: 100,
-  employee401kContribution: 24_500,
-  esppDiscountPercent: 15,
-  esppContributionPercent: 10,
-};
-
-const HSA_FAMILY_LIMIT = 8_550;
+import { STEVEN_COMP, SONYA_COMP, HSA_FAMILY_LIMIT } from '../../config/household';
 
 // ── Types ─────────────────────────────────────────────────────────
 

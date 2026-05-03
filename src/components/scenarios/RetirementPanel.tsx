@@ -17,6 +17,7 @@ import {
   FIRE_SPENDING_TIERS,
 } from '../../engine/fire';
 import type { FIREConfig, FIREVariant } from '../../engine/types';
+import { STEVEN_COMP, SONYA_COMP, HSA_FAMILY_LIMIT } from '../../config/household';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
@@ -189,11 +190,11 @@ export default function RetirementPanel() {
         const annualExp = (totalExpenses / monthCount) * 12;
 
         // Compute take-home pay (same logic as CashFlowPanel)
-        const combinedBase = 158_412 + 140_000;
+        const combinedBase = STEVEN_COMP.baseSalary + SONYA_COMP.baseSalary;
         const combinedBonus = combinedBase * 0.10;
         const cashIncome = combinedBase + combinedBonus;
-        const preTax401k = 49_000;
-        const preTaxHSA = 8_550;
+        const preTax401k = STEVEN_COMP.employee401kContribution + SONYA_COMP.employee401kContribution;
+        const preTaxHSA = HSA_FAMILY_LIMIT;
         const standardDeduction = 32_300;
         const federalTaxable = Math.max(0, cashIncome - preTax401k - preTaxHSA - standardDeduction);
         const brackets = [
@@ -214,8 +215,8 @@ export default function RetirementPanel() {
           if (rem <= 0) break;
         }
         const ssWageBase = 176_100;
-        const stevenFICA = Math.min(158_412, ssWageBase) * 0.0765 + Math.max(0, 158_412 - 200_000) * 0.009;
-        const sonyaFICA = Math.min(140_000, ssWageBase) * 0.0765 + Math.max(0, 140_000 - 200_000) * 0.009;
+        const stevenFICA = Math.min(STEVEN_COMP.baseSalary, ssWageBase) * 0.0765 + Math.max(0, STEVEN_COMP.baseSalary - 200_000) * 0.009;
+        const sonyaFICA = Math.min(SONYA_COMP.baseSalary, ssWageBase) * 0.0765 + Math.max(0, SONYA_COMP.baseSalary - 200_000) * 0.009;
         const totalTaxes = federalIncomeTax + stevenFICA + sonyaFICA;
         const takeHome = cashIncome - preTax401k - preTaxHSA - totalTaxes;
         const savings = takeHome - annualExp;

@@ -26,6 +26,8 @@ import type {
   WeightedProjection,
 } from './types';
 
+import { STEVEN_COMP } from '../config/household';
+
 import {
   CONTRIBUTION_LIMIT_UNDER_50,
   MSFT_MATCH_PERCENT,
@@ -207,10 +209,10 @@ export function createDefaultConfig(overrides: Partial<ProjectionConfig> = {}): 
     retirementAge: 65,
     currentYear: 2026,
 
-    currentBase: 158_412,
+    currentBase: STEVEN_COMP.baseSalary,
     currentLevel: 62,
     currentBonusTargetPercent: 0.12,
-    currentStockAward: 18_000,
+    currentStockAward: STEVEN_COMP.rsuAnnual,
 
     promotions: DEFAULT_PROMOTIONS,
     levelParams: DEFAULT_LEVEL_PARAMS,

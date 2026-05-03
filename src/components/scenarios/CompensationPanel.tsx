@@ -22,6 +22,7 @@ import BreakdownChart from '../charts/BreakdownChart';
 import { calcCompensation, type PersonComp } from '../../engine/mockEngine';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { createDefaultConfig, projectCompensationGrowth } from '../../engine/projection';
+import { STEVEN_COMP, SONYA_COMP } from '../../config/household';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
@@ -68,31 +69,7 @@ const S = {
   axisTick: { fontSize: 11, fill: COLORS.textMuted },
 };
 
-// ── Data constants ─────────────────────────────────────────────────
-
-const DEFAULT_STEVEN: PersonComp = {
-  baseSalary: 158_412,
-  bonusTargetPercent: 10,
-  rsuAnnual: 18_000,
-  employer401kMatchPercent: 50,
-  employer401kMatchLimit: 100,
-  employee401kContribution: 24_500,
-  esppDiscountPercent: 15,
-  esppContributionPercent: 10,
-};
-
-const DEFAULT_PARTNER: PersonComp = {
-  baseSalary: 140_000,       // MSFT L61 placeholder — update with real numbers
-  bonusTargetPercent: 10,
-  rsuAnnual: 25_000,         // MSFT L61 typical annual stock award
-  employer401kMatchPercent: 50,
-  employer401kMatchLimit: 100, // MSFT matches 50% of full contribution
-  employee401kContribution: 24_500,
-  esppDiscountPercent: 15,
-  esppContributionPercent: 10,
-};
-
-interface CompHistoryEntry {
+interfaceCompHistoryEntry {
   fy: string;
   baseMidpoint: number;
   bonus: number;
@@ -181,8 +158,8 @@ const TAB_CONFIG: { id: CompTab; label: string; icon: string }[] = [
 export default function CompensationPanel() {
   const [activeTab, setActiveTab] = useState<CompTab>('overview');
   const [activePerson, setActivePerson] = useState<'steven' | 'partner'>('steven');
-  const [steven, setSteven] = useState<PersonComp>(DEFAULT_STEVEN);
-  const [partner, setPartner] = useState<PersonComp>(DEFAULT_PARTNER);
+  const [steven, setSteven] = useState<PersonComp>(STEVEN_COMP);
+  const [partner, setPartner] = useState<PersonComp>(SONYA_COMP);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
   // Brief loading flash on input change

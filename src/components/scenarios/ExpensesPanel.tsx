@@ -24,6 +24,8 @@ import {
   calculateAllocation,
 } from '../../engine/expenses';
 import type { ExpenseGroup, SavingsBucketGroup } from '../../engine/types';
+import { calcCompensation } from '../../engine/mockEngine';
+import { SONYA_COMP } from '../../config/household';
 import ExpenseImportPanel from './ExpenseImportPanel';
 import type { Transaction, ImportMeta } from './ExpenseImportPanel';
 
@@ -161,7 +163,7 @@ export default function ExpensesPanel() {
 
   // Income inputs
   const [stevenIncome, setStevenIncome] = useState(210_000);
-  const [spouseIncome, setSpouseIncome] = useState(185_000); // MSFT L61 total comp placeholder
+  const [spouseIncome, setSpouseIncome] = useState(() => Math.round(calcCompensation(SONYA_COMP).totalComp));
   const householdIncome = stevenIncome + spouseIncome;
 
   // FIRE params
