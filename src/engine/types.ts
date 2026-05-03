@@ -29,6 +29,7 @@ export interface HouseholdFinances {
 
 // ── Compensation ──────────────────────────────────────────────────
 
+/** Full compensation input — richer schema vs PersonComp in mockEngine.ts (which is used by household.ts). */
 export interface CompensationInput {
   baseSalary: number;
   bonusTargetPercent: number;    // e.g. 15 for 15%
@@ -507,15 +508,7 @@ export interface FIREScenarioComparison {
 export type PropertyType = 'sfh' | 'condo' | 'townhome';
 export type EastsideCity = 'kirkland' | 'redmond' | 'bellevue';
 
-export interface EastsideHousingConfig {
-  city: EastsideCity;
-  propertyType: PropertyType;
-  combinedAnnualIncome: number;      // from comp page
-  downPaymentPercent: number;
-  // override defaults if user wants
-  customHomePrice?: number;
-  customMortgageRate?: number;
-}
+// ── Scenario Comparison ───────────────────────────────────────────
 
 /** Side-by-side scenario comparison */
 export interface ScenarioComparison {

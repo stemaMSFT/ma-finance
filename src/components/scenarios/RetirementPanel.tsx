@@ -18,6 +18,7 @@ import {
 } from '../../engine/fire';
 import type { FIREConfig, FIREVariant } from '../../engine/types';
 import { STEVEN_COMP, SONYA_COMP, HSA_FAMILY_LIMIT } from '../../config/household';
+import { calcHouseholdTaxes } from '../../engine/taxes';
 
 // ── Color tokens ───────────────────────────────────────────────────
 const COLORS = {
@@ -189,36 +190,9 @@ export default function RetirementPanel() {
         const totalExpenses = filtered.reduce((s, t) => s + t.amount, 0);
         const annualExp = (totalExpenses / monthCount) * 12;
 
-        // Compute take-home pay (same logic as CashFlowPanel)
-        const combinedBase = STEVEN_COMP.baseSalary + SONYA_COMP.baseSalary;
-        const combinedBonus = combinedBase * 0.10;
-        const cashIncome = combinedBase + combinedBonus;
-        const preTax401k = STEVEN_COMP.employee401kContribution + SONYA_COMP.employee401kContribution;
-        const preTaxHSA = HSA_FAMILY_LIMIT;
-        const standardDeduction = 32_300;
-        const federalTaxable = Math.max(0, cashIncome - preTax401k - preTaxHSA - standardDeduction);
-        const brackets = [
-          { limit: 24_800, rate: 0.10 },
-          { limit: 76_000, rate: 0.12 },
-          { limit: 110_600, rate: 0.22 },
-          { limit: 192_150, rate: 0.24 },
-          { limit: 108_900, rate: 0.32 },
-          { limit: 256_250, rate: 0.35 },
-          { limit: Infinity, rate: 0.37 },
-        ];
-        let federalIncomeTax = 0;
-        let rem = federalTaxable;
-        for (const { limit, rate } of brackets) {
-          const inBracket = Math.min(rem, limit);
-          federalIncomeTax += inBracket * rate;
-          rem -= inBracket;
-          if (rem <= 0) break;
-        }
-        const ssWageBase = 176_100;
-        const stevenFICA = Math.min(STEVEN_COMP.baseSalary, ssWageBase) * 0.0765 + Math.max(0, STEVEN_COMP.baseSalary - 200_000) * 0.009;
-        const sonyaFICA = Math.min(SONYA_COMP.baseSalary, ssWageBase) * 0.0765 + Math.max(0, SONYA_COMP.baseSalary - 200_000) * 0.009;
-        const totalTaxes = federalIncomeTax + stevenFICA + sonyaFICA;
-        const takeHome = cashIncome - preTax401k - preTaxHSA - totalTaxes;
+        // Compute take-home pay using shared tax module
+        const householdTaxes = calcHouseholdTaxes(STEVEN_COMP, SONYA_COMP);
+        const takeHome = householdTaxes.takeHome;
         const savings = takeHome - annualExp;
 
         setActualAnnualExpenses(Math.round(annualExp));

@@ -17,11 +17,3 @@ export function formatPercent(value: number, decimals = 1): string {
   return `${value.toFixed(decimals)}%`;
 }
 
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(Math.round(value));
-}
-
-export function formatYears(value: number): string {
-  if (!isFinite(value)) return '∞ years';
-  return `${value.toFixed(1)} yrs`;
-}

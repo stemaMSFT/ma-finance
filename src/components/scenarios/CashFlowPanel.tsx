@@ -12,6 +12,7 @@ import { calcCompensation, type PersonComp } from '../../engine/mockEngine';
 import { EXPENSE_CATEGORIES } from '../../engine/expenses';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { STEVEN_COMP, SONYA_COMP, HSA_FAMILY_LIMIT } from '../../config/household';
+import { calcHouseholdTaxes } from '../../engine/taxes';
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -53,47 +54,11 @@ export default function CashFlowPanel() {
   const combined401kMatch = steven.employer401kMatch + sonya.employer401kMatch;
 
   // ── Deductions & Taxes ────────────────────────────────────────
-  const preTax401k = STEVEN_COMP.employee401kContribution + SONYA_COMP.employee401kContribution;
-  const preTaxHSA = HSA_FAMILY_LIMIT;
+  const taxes = calcHouseholdTaxes(STEVEN_COMP, SONYA_COMP);
+  const { preTax401k, preTaxHSA, federalIncomeTax, stevenFICA, sonyaFICA, totalFICA, totalTaxes, effectiveTaxRate } = taxes;
   const totalPreTaxDeductions = preTax401k + preTaxHSA;
-
-  // Tax calculation — compute FICA and federal separately for accuracy
-  // FICA is on gross wages (401k does NOT reduce FICA), HSA does reduce FICA
-  const ssWageBase = 176_100;
-  const stevenFICA =
-    Math.min(STEVEN_COMP.baseSalary, ssWageBase) * 0.0765 +
-    Math.max(0, STEVEN_COMP.baseSalary - 200_000) * 0.009;
-  const sonyaFICA =
-    Math.min(SONYA_COMP.baseSalary, ssWageBase) * 0.0765 +
-    Math.max(0, SONYA_COMP.baseSalary - 200_000) * 0.009;
-  const totalFICA = stevenFICA + sonyaFICA;
-
-  // Federal income tax: gross cash income minus pre-tax deductions minus standard deduction
-  // Note: RSUs/ESPP/401k-match are comp but not regular W-2 cash for this simplified calc
-  const cashIncome = combinedBase + combinedBonus; // W-2 cash income
-  const standardDeduction = 32_300;
-  const federalTaxable = Math.max(0, cashIncome - preTax401k - preTaxHSA - standardDeduction);
-  const brackets = [
-    { limit: 24_800, rate: 0.10 },
-    { limit: 76_000, rate: 0.12 },
-    { limit: 110_600, rate: 0.22 },
-    { limit: 192_150, rate: 0.24 },
-    { limit: 108_900, rate: 0.32 },
-    { limit: 256_250, rate: 0.35 },
-    { limit: Infinity, rate: 0.37 },
-  ];
-  let federalIncomeTax = 0;
-  let remaining = federalTaxable;
-  for (const { limit, rate } of brackets) {
-    const inBracket = Math.min(remaining, limit);
-    federalIncomeTax += inBracket * rate;
-    remaining -= inBracket;
-    if (remaining <= 0) break;
-  }
-
-  const totalTaxes = federalIncomeTax + totalFICA;
-  const effectiveTaxRate = cashIncome > 0 ? totalTaxes / cashIncome : 0;
-  const takeHomePay = cashIncome - totalPreTaxDeductions - totalTaxes;
+  const cashIncome = taxes.totalCashIncome;
+  const takeHomePay = taxes.takeHome;
 
   // ── Expenses from Imported Data ───────────────────────────────
   const expenseData = useMemo(() => {
