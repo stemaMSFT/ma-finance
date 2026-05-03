@@ -15,15 +15,13 @@ import {
   FEDERAL_TAX_BRACKETS_MFJ,
   FEDERAL_TAX_BRACKETS_SINGLE,
   FEDERAL_TAX_BRACKETS_HOH,
-  DEFAULT_INFLATION_RATE,
   DEFAULT_SAFE_WITHDRAWAL_RATE,
   SS_FULL_RETIREMENT_AGE,
   SS_EARLY_CLAIM_AGE,
-  SS_DELAYED_CLAIM_AGE,
   SS_EARLY_REDUCTION_RATE,
   SS_DELAYED_BONUS_RATE,
 } from './constants';
-import { compoundGrowth, futureValue, adjustForInflation } from './projections';
+import { compoundGrowth } from './projections';
 
 // ── Extended Input Types ──────────────────────────────────────────
 // Added by Linus: extends Danny's RetirementInput with age/income for projection math.
@@ -236,7 +234,6 @@ export function calculate401kProjection(input: Projection401kInput): ScenarioRes
  */
 export function calculateRetirementReadiness(input: RetirementReadinessInput): RetirementReadinessResult {
   const {
-    currentAge,
     targetRetirementAge,
     desiredAnnualIncome,
     socialSecurityEstimate,
@@ -245,8 +242,6 @@ export function calculateRetirementReadiness(input: RetirementReadinessInput): R
 
   const warnings: string[] = [];
   const yearsInRetirement = 95 - targetRetirementAge; // plan to age 95
-  const yearsToRetirement = targetRetirementAge - currentAge;
-
   // Social Security adjustments by claim age
   const ssAtFRA = socialSecurityEstimate * 12; // annual at FRA (67)
   const ssAt62 = ssAtFRA * (1 - SS_EARLY_REDUCTION_RATE);
