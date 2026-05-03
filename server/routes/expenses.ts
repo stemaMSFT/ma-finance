@@ -115,6 +115,15 @@ const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   // Utilities
   [/city\s*of\s*kirkland/i, 'utilities'],
 
+  // Dining: cafeterias, food courts
+  [/\bms\s*cafe\b/i, 'dining'],
+
+  // Shopping: company store
+  [/\becompanystore\b/i, 'shopping'],
+
+  // Housing: pre-wedding rent
+  [/wei\s*lin.*\u{1F3E0}/iu, 'housing'],
+
   // Wedding expenses — excluded from ongoing spending analysis
   [/wedding\s*5\/24/i, '__wedding'],
   [/steven\s*&?\s*sonya.*wedding/i, '__wedding'],
