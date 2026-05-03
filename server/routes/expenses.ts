@@ -59,8 +59,8 @@ const CATEGORY_MAP: Record<string, string> = {
   'fees': 'debt',
   'taxes': 'misc',
   'legal': 'misc',
-  'charitable donations': 'giving',
-  'gifts': 'giving',
+  'charitable donations': 'gifts',
+  'gifts': 'gifts',
   'education': 'childcare',
   'family care': 'childcare',
 
@@ -125,7 +125,7 @@ const DESCRIPTION_OVERRIDES: Array<[RegExp, string]> = [
   [/zelle.*yan\s*wang.*cell\s*phone/i, 'utilities'],
   [/zelle.*steven\s*ma\s*conf#/i, '__transfer'],
   [/zelle.*yanan\s*ma/i, '__transfer'],
-  [/zelle.*missions\s*giving/i, 'giving'],
+  [/zelle.*missions\s*giving/i, 'gifts'],
 
   // Venmo/Zelle/CashApp: generic fallback — treat as real expense
   [/\bvenmo\b/i, '__venmo'],

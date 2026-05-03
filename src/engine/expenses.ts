@@ -128,12 +128,12 @@ export const EXPENSE_CATEGORIES: ExpenseCategoryDef[] = [
     min: 0, max: 5_000, step: 50,
   },
   {
-    id: 'giving',
-    label: 'Giving',
+    id: 'gifts',
+    label: 'Gifts & Donations',
     icon: '🎁',
     group: 'obligations',
     defaultMonthly: 200,
-    description: 'Charitable giving, tithes, family gifts',
+    description: 'Charitable giving, family gifts, holidays',
     min: 0, max: 2_000, step: 25,
   },
 
