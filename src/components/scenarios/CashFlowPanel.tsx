@@ -76,7 +76,10 @@ export default function CashFlowPanel() {
     if (!filtered.length) return {};
 
     const months = [...new Set(filtered.map(t => t.date.slice(0, 7)))].sort().reverse();
-    const recentMonth = months[0];
+    // Pick the most recent *complete* month (skip current partial month)
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const recentMonth = months.find(m => m < currentMonth) ?? months[0];
 
     const byCategory: Record<string, Array<{ date: string; description: string; amount: number }>> = {};
     for (const t of filtered.filter(t => t.date.startsWith(recentMonth))) {
