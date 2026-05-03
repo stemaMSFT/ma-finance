@@ -10,11 +10,13 @@ import RetirementPanel from './components/scenarios/RetirementPanel';
 import RetirementProjectionPanel from './components/scenarios/RetirementProjectionPanel';
 import HousingPanel from './components/scenarios/HousingPanel';
 import RenovationPanel from './components/scenarios/RenovationPanel';
+import CashFlowPanel from './components/scenarios/CashFlowPanel';
 import './App.css';
 
 const panels: Record<ScenarioTab, React.FC> = {
   compensation: CompensationPanel,
   expenses: ExpensesPanel,
+  cashflow: CashFlowPanel,
   retirement: RetirementPanel,
   projection: RetirementProjectionPanel,
   housing: HousingPanel,

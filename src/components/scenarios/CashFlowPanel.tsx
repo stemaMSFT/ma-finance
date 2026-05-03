@@ -1,0 +1,452 @@
+/**
+ * CashFlowPanel — Full financial waterfall from gross income to surplus.
+ * Shows where all household money goes: income → deductions → taxes → expenses → surplus.
+ */
+
+import { useState, useEffect, useMemo } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
+} from 'recharts';
+import { calcCompensation, type PersonComp } from '../../engine/mockEngine';
+import { EXPENSE_CATEGORIES } from '../../engine/expenses';
+import { formatCurrency, formatPercent } from '../../utils/format';
+
+// ── Compensation Defaults ─────────────────────────────────────────
+
+const STEVEN_COMP: PersonComp = {
+  baseSalary: 158_412,
+  bonusTargetPercent: 10,
+  rsuAnnual: 18_000,
+  employer401kMatchPercent: 50,
+  employer401kMatchLimit: 100,
+  employee401kContribution: 24_500,
+  esppDiscountPercent: 15,
+  esppContributionPercent: 10,
+};
+
+const SONYA_COMP: PersonComp = {
+  baseSalary: 140_000,
+  bonusTargetPercent: 10,
+  rsuAnnual: 25_000,
+  employer401kMatchPercent: 50,
+  employer401kMatchLimit: 100,
+  employee401kContribution: 24_500,
+  esppDiscountPercent: 15,
+  esppContributionPercent: 10,
+};
+
+const HSA_FAMILY_LIMIT = 8_550;
+
+// ── Types ─────────────────────────────────────────────────────────
+
+interface Transaction {
+  date: string;
+  amount: number;
+  transactionType: string;
+  mappedCategory: string;
+  description?: string;
+}
+
+// ── Component ─────────────────────────────────────────────────────
+
+export default function CashFlowPanel() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/expenses')
+      .then((r) => r.json())
+      .then((data: { imported: boolean; transactions: Transaction[] }) => {
+        if (data.imported && data.transactions?.length > 0) {
+          setTransactions(data.transactions);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // ── Compensation Calculations ─────────────────────────────────
+  const steven = useMemo(() => calcCompensation(STEVEN_COMP), []);
+  const sonya = useMemo(() => calcCompensation(SONYA_COMP), []);
+
+  const grossIncome = steven.totalComp + sonya.totalComp;
+  const combinedBase = steven.baseSalary + sonya.baseSalary;
+  const combinedBonus = steven.bonusAmount + sonya.bonusAmount;
+  const combinedRSU = steven.rsuAnnual + sonya.rsuAnnual;
+  const combinedESPP = steven.esppBenefit + sonya.esppBenefit;
+  const combined401kMatch = steven.employer401kMatch + sonya.employer401kMatch;
+
+  // ── Deductions & Taxes ────────────────────────────────────────
+  const preTax401k = STEVEN_COMP.employee401kContribution + SONYA_COMP.employee401kContribution;
+  const preTaxHSA = HSA_FAMILY_LIMIT;
+  const totalPreTaxDeductions = preTax401k + preTaxHSA;
+
+  // Tax calculation — compute FICA and federal separately for accuracy
+  // FICA is on gross wages (401k does NOT reduce FICA), HSA does reduce FICA
+  const ssWageBase = 176_100;
+  const stevenFICA =
+    Math.min(STEVEN_COMP.baseSalary, ssWageBase) * 0.0765 +
+    Math.max(0, STEVEN_COMP.baseSalary - 200_000) * 0.009;
+  const sonyaFICA =
+    Math.min(SONYA_COMP.baseSalary, ssWageBase) * 0.0765 +
+    Math.max(0, SONYA_COMP.baseSalary - 200_000) * 0.009;
+  const totalFICA = stevenFICA + sonyaFICA;
+
+  // Federal income tax: gross cash income minus pre-tax deductions minus standard deduction
+  // Note: RSUs/ESPP/401k-match are comp but not regular W-2 cash for this simplified calc
+  const cashIncome = combinedBase + combinedBonus; // W-2 cash income
+  const standardDeduction = 32_300;
+  const federalTaxable = Math.max(0, cashIncome - preTax401k - preTaxHSA - standardDeduction);
+  const brackets = [
+    { limit: 24_800, rate: 0.10 },
+    { limit: 76_000, rate: 0.12 },
+    { limit: 110_600, rate: 0.22 },
+    { limit: 192_150, rate: 0.24 },
+    { limit: 108_900, rate: 0.32 },
+    { limit: 256_250, rate: 0.35 },
+    { limit: Infinity, rate: 0.37 },
+  ];
+  let federalIncomeTax = 0;
+  let remaining = federalTaxable;
+  for (const { limit, rate } of brackets) {
+    const inBracket = Math.min(remaining, limit);
+    federalIncomeTax += inBracket * rate;
+    remaining -= inBracket;
+    if (remaining <= 0) break;
+  }
+
+  const totalTaxes = federalIncomeTax + totalFICA;
+  const effectiveTaxRate = cashIncome > 0 ? totalTaxes / cashIncome : 0;
+  const takeHomePay = cashIncome - totalPreTaxDeductions - totalTaxes;
+
+  // ── Expenses from Imported Data ───────────────────────────────
+  const expenseData = useMemo(() => {
+    const filtered = transactions.filter(
+      (t) => t.transactionType === 'expense' && t.date >= '2025-05'
+    );
+
+    // Count distinct months
+    const months = new Set(filtered.map((t) => t.date.slice(0, 7)));
+    const monthCount = Math.max(months.size, 1);
+
+    // Group by category
+    const byCategory: Record<string, number> = {};
+    for (const t of filtered) {
+      const cat = t.mappedCategory || 'misc';
+      byCategory[cat] = (byCategory[cat] || 0) + t.amount;
+    }
+
+    // Monthly averages sorted by amount
+    const categories = Object.entries(byCategory)
+      .map(([id, total]) => ({
+        id,
+        monthly: total / monthCount,
+        annual: (total / monthCount) * 12,
+      }))
+      .sort((a, b) => b.monthly - a.monthly);
+
+    const totalMonthly = categories.reduce((sum, c) => sum + c.monthly, 0);
+    return { categories, totalMonthly, totalAnnual: totalMonthly * 12, monthCount };
+  }, [transactions]);
+
+  // ── Bottom Line ───────────────────────────────────────────────
+  const monthlySurplus = takeHomePay / 12 - expenseData.totalMonthly;
+  const annualSurplus = takeHomePay - expenseData.totalAnnual;
+  const totalSaved = totalPreTaxDeductions + Math.max(0, annualSurplus);
+  const savingsRateOfGross = cashIncome > 0 ? (totalSaved / cashIncome) * 100 : 0;
+
+  // ── Waterfall Chart Data ──────────────────────────────────────
+  const waterfallData = [
+    { name: 'Cash Income', value: cashIncome, type: 'income' },
+    { name: 'Pre-Tax Deductions', value: -totalPreTaxDeductions, type: 'deduction' },
+    { name: 'Taxes', value: -totalTaxes, type: 'tax' },
+    { name: 'Take-Home', value: takeHomePay, type: 'subtotal' },
+    { name: 'Expenses', value: -expenseData.totalAnnual, type: 'expense' },
+    { name: 'Surplus', value: annualSurplus, type: 'surplus' },
+  ];
+
+  const colorMap: Record<string, string> = {
+    income: '#10b981',
+    deduction: '#3b82f6',
+    tax: '#f97316',
+    subtotal: '#6366f1',
+    expense: '#64748b',
+    surplus: annualSurplus >= 0 ? '#059669' : '#dc2626',
+  };
+
+  // ── Helper: get category label ────────────────────────────────
+  function getCategoryInfo(id: string) {
+    const cat = EXPENSE_CATEGORIES.find((c) => c.id === id);
+    return { label: cat?.label || id, icon: cat?.icon || '📦' };
+  }
+
+  if (loading) {
+    return <div className="panel-loading">Loading cash flow data...</div>;
+  }
+
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: 1100 }}>
+      <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>💸 Cash Flow Waterfall</h2>
+      <p style={{ color: '#64748b', marginBottom: 24 }}>
+        Where every dollar goes — from gross income to surplus
+      </p>
+
+      {/* ── Waterfall Chart ─────────────────────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Annual Flow</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={waterfallData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+            <YAxis tickFormatter={(v: number) => formatCurrency(v, true)} tick={{ fontSize: 12 }} />
+            <Tooltip formatter={(v: number) => formatCurrency(Math.abs(v))} />
+            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+              {waterfallData.map((entry, i) => (
+                <Cell key={i} fill={colorMap[entry.type]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
+          {[
+            { label: 'Income', color: '#10b981' },
+            { label: 'Deductions', color: '#3b82f6' },
+            { label: 'Taxes', color: '#f97316' },
+            { label: 'Expenses', color: '#64748b' },
+            { label: 'Surplus', color: '#059669' },
+          ].map((l) => (
+            <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+              <span style={{ width: 12, height: 12, borderRadius: 2, background: l.color, display: 'inline-block' }} />
+              {l.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Section 1: Gross Income ────────────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Section 1: Household Income</h3>
+        <div style={bigNumber}>{formatCurrency(cashIncome)}<span style={perYear}>/year cash</span></div>
+        <div style={gridStyle}>
+          <IncomeRow label="Combined Base Salary" value={combinedBase} />
+          <IncomeRow label="Combined Bonus (10% target)" value={combinedBonus} />
+        </div>
+        <div style={{ marginTop: 16, padding: '12px 16px', background: '#f1f5f9', borderRadius: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>Non-Cash / Deferred Compensation</div>
+          <div style={gridStyle}>
+            <IncomeRow label="RSUs (vesting)" value={combinedRSU} />
+            <IncomeRow label="ESPP Benefit" value={combinedESPP} />
+            <IncomeRow label="401k Employer Match" value={combined401kMatch} />
+          </div>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
+            Total comp incl. non-cash: {formatCurrency(grossIncome)}
+          </div>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 13, color: '#64748b' }}>
+          Steven: {formatCurrency(steven.totalComp)} | Sonya: {formatCurrency(sonya.totalComp)}
+        </div>
+      </div>
+
+      {/* ── Section 2: Deductions & Taxes ──────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Section 2: Deductions & Taxes</h3>
+
+        <div style={{ marginBottom: 16 }}>
+          <h4 style={subHeading}>Pre-Tax Deductions</h4>
+          <div style={gridStyle}>
+            <FlowRow label="401k Contributions (2×$24,500)" value={preTax401k} color="#3b82f6" negative />
+            <FlowRow label="HSA (Family)" value={preTaxHSA} color="#3b82f6" negative />
+          </div>
+          <div style={subtotalRow}>
+            Adjusted Gross Income: <strong>{formatCurrency(cashIncome - totalPreTaxDeductions)}</strong>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <h4 style={subHeading}>Taxes</h4>
+          <div style={gridStyle}>
+            <FlowRow label="Federal Income Tax" value={federalIncomeTax} color="#f97316" negative />
+            <FlowRow label="FICA (SS + Medicare)" value={totalFICA} color="#f97316" negative />
+          </div>
+          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+            Effective rate: {formatPercent(effectiveTaxRate * 100)}
+          </div>
+        </div>
+
+        <div style={{ ...subtotalRow, background: '#eef2ff', borderRadius: 8, padding: '12px 16px' }}>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>💵 Take-Home Pay</span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: '#4f46e5' }}>
+            {formatCurrency(takeHomePay)}/yr ({formatCurrency(takeHomePay / 12)}/mo)
+          </span>
+        </div>
+      </div>
+
+      {/* ── Section 3: Expenses ────────────────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Section 3: Where Money Goes (Actual Expenses)</h3>
+        <p style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>
+          Based on {expenseData.monthCount} month(s) of imported data (May 2025+)
+        </p>
+
+        {expenseData.categories.length === 0 ? (
+          <p style={{ color: '#94a3b8' }}>No expense data available. Import transactions to see actuals.</p>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '6px 16px', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, fontSize: 12, color: '#94a3b8' }}>CATEGORY</span>
+              <span style={{ fontWeight: 600, fontSize: 12, color: '#94a3b8', textAlign: 'right' }}>MONTHLY</span>
+              <span style={{ fontWeight: 600, fontSize: 12, color: '#94a3b8', textAlign: 'right' }}>ANNUAL</span>
+              {expenseData.categories.map((c) => {
+                const { label, icon } = getCategoryInfo(c.id);
+                return (
+                  <ExpenseRow key={c.id} icon={icon} label={label} monthly={c.monthly} annual={c.annual} />
+                );
+              })}
+            </div>
+            <div style={{ ...subtotalRow, marginTop: 12, borderTop: '2px solid #e2e8f0', paddingTop: 12 }}>
+              <span style={{ fontWeight: 700 }}>Total Expenses</span>
+              <span>
+                <strong>{formatCurrency(expenseData.totalMonthly)}</strong>/mo &nbsp;|&nbsp;
+                <strong>{formatCurrency(expenseData.totalAnnual)}</strong>/yr
+              </span>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 13, color: expenseData.totalAnnual > takeHomePay ? '#dc2626' : '#059669' }}>
+              {expenseData.totalAnnual > takeHomePay
+                ? `⚠️ Spending exceeds take-home by ${formatCurrency(expenseData.totalAnnual - takeHomePay)}/yr`
+                : `✅ Spending is ${formatCurrency(takeHomePay - expenseData.totalAnnual)}/yr below take-home`}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Section 4: Bottom Line ─────────────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Section 4: The Bottom Line</h3>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 16,
+          marginBottom: 16,
+        }}>
+          <MetricCard
+            label="Monthly Surplus"
+            value={formatCurrency(monthlySurplus)}
+            color={monthlySurplus >= 0 ? '#059669' : '#dc2626'}
+          />
+          <MetricCard
+            label="Annual Surplus"
+            value={formatCurrency(annualSurplus)}
+            color={annualSurplus >= 0 ? '#059669' : '#dc2626'}
+          />
+          <MetricCard
+            label="Savings Rate (of gross)"
+            value={formatPercent(savingsRateOfGross)}
+            color="#4f46e5"
+          />
+        </div>
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 16 }}>
+          <p style={{ margin: 0, fontSize: 14, color: '#166534' }}>
+            <strong>💡 After 401k + HSA + expenses:</strong> You have approximately{' '}
+            <strong>{formatCurrency(Math.max(0, annualSurplus))}/yr</strong> ({formatCurrency(Math.max(0, monthlySurplus))}/mo)
+            available for additional savings, investments, or discretionary goals beyond your pre-tax accounts.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sub-components ────────────────────────────────────────────────
+
+function IncomeRow({ label, value }: { label: string; value: number }) {
+  return (
+    <>
+      <span style={{ fontSize: 14 }}>{label}</span>
+      <span style={{ textAlign: 'right', fontWeight: 600, color: '#10b981' }}>
+        {formatCurrency(value)}
+      </span>
+    </>
+  );
+}
+
+function FlowRow({ label, value, color, negative }: { label: string; value: number; color: string; negative?: boolean }) {
+  return (
+    <>
+      <span style={{ fontSize: 14 }}>{label}</span>
+      <span style={{ textAlign: 'right', fontWeight: 600, color }}>
+        {negative ? '−' : ''}{formatCurrency(value)}
+      </span>
+    </>
+  );
+}
+
+function ExpenseRow({ icon, label, monthly, annual }: { icon: string; label: string; monthly: number; annual: number }) {
+  return (
+    <>
+      <span style={{ fontSize: 14 }}>{icon} {label}</span>
+      <span style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(monthly)}</span>
+      <span style={{ textAlign: 'right', fontSize: 13, color: '#64748b' }}>{formatCurrency(annual)}</span>
+    </>
+  );
+}
+
+function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ background: '#f8fafc', borderRadius: 8, padding: '16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────
+
+const cardStyle: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 12,
+  padding: 24,
+  marginBottom: 20,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+};
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: 16,
+  fontWeight: 700,
+  marginBottom: 12,
+  color: '#1e293b',
+};
+
+const subHeading: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 600,
+  color: '#475569',
+  marginBottom: 8,
+};
+
+const bigNumber: React.CSSProperties = {
+  fontSize: 32,
+  fontWeight: 800,
+  color: '#10b981',
+  marginBottom: 16,
+};
+
+const perYear: React.CSSProperties = {
+  fontSize: 16,
+  fontWeight: 400,
+  color: '#64748b',
+  marginLeft: 4,
+};
+
+const gridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr auto',
+  gap: '6px 24px',
+  alignItems: 'center',
+};
+
+const subtotalRow: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  fontSize: 14,
+};

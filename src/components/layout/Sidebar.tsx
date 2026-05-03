@@ -9,6 +9,7 @@ interface SidebarProps {
 const tabs: { id: ScenarioTab; label: string; icon: string }[] = [
   { id: 'compensation', label: 'Compensation', icon: '💰' },
   { id: 'expenses', label: 'Expenses', icon: '📊' },
+  { id: 'cashflow', label: 'Cash Flow', icon: '💸' },
   { id: 'retirement', label: 'Retirement', icon: '🏦' },
   { id: 'projection', label: 'Projection', icon: '📉' },
   { id: 'housing', label: 'Home Buying', icon: '🏠' },

@@ -109,7 +109,7 @@ export interface ScenarioResult {
 
 // ── Scenario Tabs ─────────────────────────────────────────────────
 
-export type ScenarioTab = 'compensation' | 'expenses' | 'retirement' | 'projection' | 'housing' | 'renovation';
+export type ScenarioTab = 'compensation' | 'expenses' | 'cashflow' | 'retirement' | 'projection' | 'housing' | 'renovation';
 
 // ── Expense Budget ────────────────────────────────────────────────
 
